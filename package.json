@@ -2,12 +2,13 @@
   "name": "enterprise-ai-governance-copilot",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
     "dev": "turbo run dev",
+    "dev:api": "npm -w apps/api run dev",
+    "dev:dashboard": "npm -w apps/dashboard run dev",
+    "build": "turbo run build",
     "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types"
-  },
+    "test": "turbo run test"
+},
   "devDependencies": {
     "prettier": "^3.7.4",
     "turbo": "^2.8.9",
@@ -22,3 +23,4 @@
     "packages/*"
   ]
 }
+
