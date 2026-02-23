@@ -1,0 +1,15 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AuditRun {
+  id        String   @id @default(uuid())
+  repoUrl   String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+}
