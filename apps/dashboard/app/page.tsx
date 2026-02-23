@@ -1,102 +1,174 @@
-import Image, { type ImageProps } from "next/image";
-import { Button } from "@repo/ui/button";
+"use client";
+
+import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 
-type Props = Omit<ImageProps, "src"> & {
-  srcLight: string;
-  srcDark: string;
+// TypeScript type matching Prisma AuditRun model
+type AuditRun = {
+  id: string;
+  repoUrl: string;
+  status: string;
+  createdAt: string;
 };
 
-const ThemeImage = (props: Props) => {
-  const { srcLight, srcDark, ...rest } = props;
-
-  return (
-    <>
-      <Image {...rest} src={srcLight} className="imgLight" />
-      <Image {...rest} src={srcDark} className="imgDark" />
-    </>
-  );
-};
+const API_URL = "http://localhost:3001";
 
 export default function Home() {
+  // State for form input
+  const [repoUrl, setRepoUrl] = useState("");
+  
+  // State for audit runs list
+  const [auditRuns, setAuditRuns] = useState<AuditRun[]>([]);
+  
+  // State for loading and error handling
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch audit runs on page load
+  useEffect(() => {
+    fetchAuditRuns();
+  }, []);
+
+  // Function to fetch all audit runs from API
+  const fetchAuditRuns = async () => {
+    try {
+      const response = await fetch(`${API_URL}/audit-runs`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch audit runs");
+      }
+      const data = await response.json();
+      setAuditRuns(data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    }
+  };
+
+  // Function to start a new audit
+  const handleStartAudit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!repoUrl.trim()) {
+      setError("Please enter a repository URL");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/audit-runs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ repoUrl }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create audit run");
+      }
+
+      // Clear input and refresh list
+      setRepoUrl("");
+      await fetchAuditRuns();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        <ThemeImage
-          className={styles.logo}
-          srcLight="turborepo-dark.svg"
-          srcDark="turborepo-light.svg"
-          alt="Turborepo logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>apps/web/app/page.tsx</code>
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+        <h1>Enterprise AI Governance Copilot</h1>
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new/clone?demo-description=Learn+to+implement+a+monorepo+with+a+two+Next.js+sites+that+has+installed+three+local+packages.&demo-image=%2F%2Fimages.ctfassets.net%2Fe5382hct74si%2F4K8ZISWAzJ8X1504ca0zmC%2F0b21a1c6246add355e55816278ef54bc%2FBasic.png&demo-title=Monorepo+with+Turborepo&demo-url=https%3A%2F%2Fexamples-basic-web.vercel.sh%2F&from=templates&project-name=Monorepo+with+Turborepo&repository-name=monorepo-turborepo&repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fturborepo%2Ftree%2Fmain%2Fexamples%2Fbasic&root-directory=apps%2Fdocs&skippable-integrations=1&teamSlug=vercel&utm_source=create-turbo"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+        {/* Start Audit Form */}
+        <section style={{ marginBottom: "2rem", width: "100%", maxWidth: "600px" }}>
+          <h2>Start New Audit</h2>
+          <form onSubmit={handleStartAudit} style={{ display: "flex", gap: "1rem" }}>
+            <input
+              type="text"
+              value={repoUrl}
+              onChange={(e) => setRepoUrl(e.target.value)}
+              placeholder="Enter GitHub repository URL"
+              disabled={isLoading}
+              style={{
+                flex: 1,
+                padding: "0.5rem",
+                fontSize: "1rem",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+              }}
             />
-            Deploy now
-          </a>
-          <a
-            href="https://turborepo.dev/docs?utm_source"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
-        </div>
-        <Button appName="web" className={styles.secondary}>
-          Open alert
-        </Button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              style={{
+                padding: "0.5rem 1rem",
+                fontSize: "1rem",
+                backgroundColor: "#0070f3",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: isLoading ? "not-allowed" : "pointer",
+              }}
+            >
+              {isLoading ? "Starting..." : "Start Audit"}
+            </button>
+          </form>
+          {error && (
+            <p style={{ color: "red", marginTop: "0.5rem" }}>{error}</p>
+          )}
+        </section>
+
+        {/* Audit Runs List */}
+        <section style={{ width: "100%", maxWidth: "800px" }}>
+          <h2>Recent Audit Runs</h2>
+          {auditRuns.length === 0 ? (
+            <p>No audit runs yet. Start your first audit above!</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {auditRuns.map((run) => (
+                <div
+                  key={run.id}
+                  style={{
+                    padding: "1rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "8px",
+                    backgroundColor: "#f9f9f9",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                    <strong>{run.repoUrl}</strong>
+                    <span
+                      style={{
+                        padding: "0.25rem 0.5rem",
+                        borderRadius: "4px",
+                        backgroundColor: run.status === "pending" ? "#ffa500" : "#28a745",
+                        color: "white",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      {run.status}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "0.875rem", color: "#666" }}>
+                    <div>ID: {run.id}</div>
+                    <div>Created: {formatDate(run.createdAt)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com/templates?search=turborepo&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://turborepo.dev?utm_source=create-turbo"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to turborepo.dev →
-        </a>
-      </footer>
     </div>
   );
 }
