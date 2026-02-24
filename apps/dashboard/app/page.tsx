@@ -23,6 +23,9 @@ export default function Home() {
   // State for loading and error handling
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Track which audit run is currently being executed
+  const [runningAuditId, setRunningAuditId] = useState<string | null>(null);
 
   // Fetch audit runs on page load
   useEffect(() => {
@@ -82,6 +85,43 @@ export default function Home() {
   // Format date for display
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
+  };
+
+  // Function to run an audit
+  const handleRunNow = async (id: string) => {
+    setRunningAuditId(id);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/audit-runs/${id}/run`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to run audit");
+      }
+
+      // Refresh the list to show updated status
+      await fetchAuditRuns();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setRunningAuditId(null);
+    }
+  };
+
+  // Get badge color based on status
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "#ffa500"; // orange
+      case "running":
+        return "#0070f3"; // blue
+      case "completed":
+        return "#28a745"; // green
+      default:
+        return "#6c757d"; // gray
+    }
   };
 
   return (
@@ -151,7 +191,7 @@ export default function Home() {
                       style={{
                         padding: "0.25rem 0.5rem",
                         borderRadius: "4px",
-                        backgroundColor: run.status === "pending" ? "#ffa500" : "#28a745",
+                        backgroundColor: getStatusColor(run.status),
                         color: "white",
                         fontSize: "0.875rem",
                       }}
@@ -159,10 +199,28 @@ export default function Home() {
                       {run.status}
                     </span>
                   </div>
-                  <div style={{ fontSize: "0.875rem", color: "#666" }}>
+                  <div style={{ fontSize: "0.875rem", color: "#666", marginBottom: "0.5rem" }}>
                     <div>ID: {run.id}</div>
                     <div>Created: {formatDate(run.createdAt)}</div>
                   </div>
+                  {run.status === "pending" && (
+                    <button
+                      onClick={() => handleRunNow(run.id)}
+                      disabled={runningAuditId === run.id}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        fontSize: "0.875rem",
+                        backgroundColor: "#0070f3",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: runningAuditId === run.id ? "not-allowed" : "pointer",
+                        opacity: runningAuditId === run.id ? 0.6 : 1,
+                      }}
+                    >
+                      {runningAuditId === run.id ? "Running..." : "Run Now"}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

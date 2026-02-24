@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post } from "@nestjs/common";
 import { AuditRunsService } from "./audit-runs.service";
 
 type CreateAuditRunBody = {
@@ -17,5 +17,10 @@ export class AuditRunsController {
   @Get()
   async list() {
     return this.auditRuns.list();
+  }
+
+  @Post(":id/run")
+  async run(@Param("id") id: string) {
+    return this.auditRuns.run(id);
   }
 }
