@@ -9,6 +9,21 @@ type AuditRun = {
   repoUrl: string;
   status: string;
   createdAt: string;
+  findings?: {
+    summary: {
+      total: number;
+      high: number;
+      medium: number;
+      low: number;
+    };
+    items: Array<{
+      id: string;
+      severity: "low" | "medium" | "high";
+      title: string;
+      evidence: string;
+      recommendation: string;
+    }>;
+  } | null;
 };
 
 const API_URL = "http://localhost:3001";
@@ -124,6 +139,20 @@ export default function Home() {
     }
   };
 
+  // Get badge color based on severity
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case "high":
+        return "#dc3545"; // red
+      case "medium":
+        return "#ffc107"; // yellow
+      case "low":
+        return "#17a2b8"; // teal
+      default:
+        return "#6c757d"; // gray
+    }
+  };
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
@@ -220,6 +249,56 @@ export default function Home() {
                     >
                       {runningAuditId === run.id ? "Running..." : "Run Now"}
                     </button>
+                  )}
+
+                  {/* Display Findings */}
+                  {run.findings && (
+                    <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #ddd" }}>
+                      <div style={{ fontSize: "0.875rem", fontWeight: "bold", marginBottom: "0.5rem" }}>
+                        Findings: {run.findings.summary.total} 
+                        {" ("}
+                        High {run.findings.summary.high}, 
+                        Medium {run.findings.summary.medium}, 
+                        Low {run.findings.summary.low}
+                        {")"}
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                        {run.findings.items.map((finding) => (
+                          <div
+                            key={finding.id}
+                            style={{
+                              padding: "0.75rem",
+                              backgroundColor: "#fff",
+                              borderRadius: "4px",
+                              border: "1px solid #e0e0e0",
+                            }}
+                          >
+                            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.5rem" }}>
+                              <span
+                                style={{
+                                  padding: "0.125rem 0.5rem",
+                                  borderRadius: "4px",
+                                  backgroundColor: getSeverityColor(finding.severity),
+                                  color: "white",
+                                  fontSize: "0.75rem",
+                                  fontWeight: "bold",
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                {finding.severity}
+                              </span>
+                              <strong style={{ fontSize: "0.875rem" }}>{finding.title}</strong>
+                            </div>
+                            <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.25rem" }}>
+                              <strong>Evidence:</strong> {finding.evidence}
+                            </div>
+                            <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                              <strong>Recommendation:</strong> {finding.recommendation}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               ))}

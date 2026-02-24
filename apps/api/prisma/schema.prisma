@@ -11,5 +11,6 @@ model AuditRun {
   id        String   @id @default(uuid())
   repoUrl   String
   status    String   @default("pending")
+  findings  Json?
   createdAt DateTime @default(now())
 }
