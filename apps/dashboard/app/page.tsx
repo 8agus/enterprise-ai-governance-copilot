@@ -2,37 +2,8 @@
 
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
-
-type FindingSeverity = "low" | "medium" | "high";
-
-type Findings = {
-  summary: {
-    total: number;
-    high: number;
-    medium: number;
-    low: number;
-  };
-  items: Array<{
-    id: string;
-    severity: FindingSeverity;
-    title: string;
-    evidence: string;
-    recommendation: string;
-  }>;
-};
-
-type AuditRunStatus = "pending" | "running" | "completed";
-
-// TypeScript type matching Prisma AuditRun model
-type AuditRun = {
-  id: string;
-  repoUrl: string;
-  status: AuditRunStatus;
-  createdAt: string;
-  findings: Findings | null;
-};
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import type { AuditRun } from "../lib/api";
+import { createAuditRun, getAuditRuns, runPendingAudit } from "../lib/api";
 
 export default function Home() {
   // State for form input
@@ -59,11 +30,7 @@ export default function Home() {
   // Function to fetch all audit runs from API
   const fetchAuditRuns = async () => {
     try {
-      const response = await fetch(`${API_URL}/audit-runs`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch audit runs");
-      }
-      const data = await response.json();
+      const data = await getAuditRuns();
       setAuditRuns(data);
       setError(null);
     } catch (err) {
@@ -84,17 +51,7 @@ export default function Home() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/audit-runs`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ repoUrl }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to create audit run");
-      }
+      await createAuditRun(repoUrl);
 
       // Clear input and refresh list
       setRepoUrl("");
@@ -117,13 +74,7 @@ export default function Home() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/audit-runs/${id}/run`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to run audit");
-      }
+      await runPendingAudit(id);
 
       // Refresh the list to show updated status
       await fetchAuditRuns();
@@ -135,7 +86,7 @@ export default function Home() {
   };
 
   // Get badge color based on status
-  const getStatusColor = (status: AuditRunStatus) => {
+  const getStatusColor = (status: AuditRun["status"]) => {
     switch (status) {
       case "pending":
         return "#ffa500"; // orange
