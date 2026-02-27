@@ -3,9 +3,10 @@
 ## Always:
 - small changes
 - keep types strict
-- add tests
+- add tests (where it adds value for judging)
 - never log secrets
 - evidence-based findings only (file+line)
+- no refactoring unrelated files
 
 ## Preferred libs:
 - zod for validation
@@ -13,5 +14,5 @@
 - octokit for GitHub API
 
 ## Output style:
-step-by-step, with commands to run
-include acceptance criteria checklist
+- step-by-step, with commands to run (assume repo root)
+- include acceptance criteria checklist

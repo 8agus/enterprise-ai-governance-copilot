@@ -3,27 +3,33 @@
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 
+type FindingSeverity = "low" | "medium" | "high";
+
+type Findings = {
+  summary: {
+    total: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  items: Array<{
+    id: string;
+    severity: FindingSeverity;
+    title: string;
+    evidence: string;
+    recommendation: string;
+  }>;
+};
+
+type AuditRunStatus = "pending" | "running" | "completed";
+
 // TypeScript type matching Prisma AuditRun model
 type AuditRun = {
   id: string;
   repoUrl: string;
-  status: string;
+  status: AuditRunStatus;
   createdAt: string;
-  findings?: {
-    summary: {
-      total: number;
-      high: number;
-      medium: number;
-      low: number;
-    };
-    items: Array<{
-      id: string;
-      severity: "low" | "medium" | "high";
-      title: string;
-      evidence: string;
-      recommendation: string;
-    }>;
-  } | null;
+  findings: Findings | null;
 };
 
 const API_URL = "http://localhost:3001";
@@ -41,6 +47,9 @@ export default function Home() {
   
   // Track which audit run is currently being executed
   const [runningAuditId, setRunningAuditId] = useState<string | null>(null);
+  
+  // Track which audit runs have expanded findings
+  const [expandedFindings, setExpandedFindings] = useState<Set<string>>(new Set());
 
   // Fetch audit runs on page load
   useEffect(() => {
@@ -126,7 +135,7 @@ export default function Home() {
   };
 
   // Get badge color based on status
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: AuditRunStatus) => {
     switch (status) {
       case "pending":
         return "#ffa500"; // orange
@@ -151,6 +160,19 @@ export default function Home() {
       default:
         return "#6c757d"; // gray
     }
+  };
+
+  // Toggle findings visibility for a specific audit run
+  const toggleFindings = (id: string) => {
+    setExpandedFindings((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -254,50 +276,75 @@ export default function Home() {
                   {/* Display Findings */}
                   {run.findings && (
                     <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #ddd" }}>
-                      <div style={{ fontSize: "0.875rem", fontWeight: "bold", marginBottom: "0.5rem" }}>
-                        Findings: {run.findings.summary.total} 
-                        {" ("}
-                        High {run.findings.summary.high}, 
-                        Medium {run.findings.summary.medium}, 
-                        Low {run.findings.summary.low}
-                        {")"}
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                        {run.findings.items.map((finding) => (
-                          <div
-                            key={finding.id}
-                            style={{
-                              padding: "0.75rem",
-                              backgroundColor: "#fff",
-                              borderRadius: "4px",
-                              border: "1px solid #e0e0e0",
-                            }}
-                          >
-                            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.5rem" }}>
-                              <span
-                                style={{
-                                  padding: "0.125rem 0.5rem",
-                                  borderRadius: "4px",
-                                  backgroundColor: getSeverityColor(finding.severity),
-                                  color: "white",
-                                  fontSize: "0.75rem",
-                                  fontWeight: "bold",
-                                  textTransform: "uppercase",
-                                }}
-                              >
-                                {finding.severity}
-                              </span>
-                              <strong style={{ fontSize: "0.875rem" }}>{finding.title}</strong>
-                            </div>
-                            <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.25rem" }}>
-                              <strong>Evidence:</strong> {finding.evidence}
-                            </div>
-                            <div style={{ fontSize: "0.8rem", color: "#666" }}>
-                              <strong>Recommendation:</strong> {finding.recommendation}
-                            </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                        {expandedFindings.has(run.id) ? (
+                          <div style={{ fontSize: "0.875rem", fontWeight: "bold" }}>Findings</div>
+                        ) : (
+                          <div style={{ fontSize: "0.875rem", fontWeight: "bold" }}>
+                            Findings: {run.findings.summary.total}
+                            {" ("}
+                            High {run.findings.summary.high},
+                            {" "}
+                            Medium {run.findings.summary.medium},
+                            {" "}
+                            Low {run.findings.summary.low}
+                            {")"}
                           </div>
-                        ))}
+                        )}
+                        <button
+                          onClick={() => toggleFindings(run.id)}
+                          style={{
+                            padding: "0.25rem 0.75rem",
+                            fontSize: "0.75rem",
+                            backgroundColor: "#6c757d",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {expandedFindings.has(run.id) ? "Hide findings" : "Show findings"}
+                        </button>
                       </div>
+                      
+                      {expandedFindings.has(run.id) && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                          {run.findings.items.map((finding) => (
+                            <div
+                              key={finding.id}
+                              style={{
+                                padding: "0.75rem",
+                                backgroundColor: "#fff",
+                                borderRadius: "4px",
+                                border: "1px solid #e0e0e0",
+                              }}
+                            >
+                              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.5rem" }}>
+                                <span
+                                  style={{
+                                    padding: "0.125rem 0.5rem",
+                                    borderRadius: "4px",
+                                    backgroundColor: getSeverityColor(finding.severity),
+                                    color: "white",
+                                    fontSize: "0.75rem",
+                                    fontWeight: "bold",
+                                    textTransform: "uppercase",
+                                  }}
+                                >
+                                  {finding.severity}
+                                </span>
+                                <strong style={{ fontSize: "0.875rem" }}>{finding.title}</strong>
+                              </div>
+                              <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.25rem" }}>
+                                <strong>Evidence:</strong> {finding.evidence}
+                              </div>
+                              <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                                <strong>Recommendation:</strong> {finding.recommendation}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -5,8 +5,9 @@ I am a self-taught developer who thrives on challenging problems and continuous 
 
 ## Technical Expertise & Experience Level
 - **Programming & Development**: Python, Web Development (self-taught with several completed projects)
-- **TypeScript (beginner), Node.js, Next.js (learning), NestJS (learning)
-- **Postgres
+- **TypeScript** (beginner)
+- **Node.js**, **Next.js**, **NestJS** (learning)
+- **PostgreSQL**
 - **Experience Level**: Self-taught developer with project portfolio but no formal work experience
 - **Learning Style**: Hands-on, project-based learning with focus on practical application
 - **Portfolio**: Referenced at 8agus.github.io_portfolio_website
@@ -35,7 +36,7 @@ I am a self-taught developer who thrives on challenging problems and continuous 
 When working with me, AI tools should:
 
 ### Experience Level Awareness
-- Remember**: I am self-taught with project experience but no professional work background
+- **Remember**: I am self-taught with project experience but no professional work background
 - Provide explanations appropriate for someone with practical knowledge but potentially limited exposure to industry standards
 - Include context about why certain approaches are considered best practices
 - Offer learning opportunities within project work
@@ -91,6 +92,10 @@ Projects succeed when they:
 - **Know my experience level** - I'm self-taught with projects but no professional experience
 - **Explain the 'why'** - Help me understand the reasoning behind technical decisions
 - **Break things down** - Present complex topics in digestible, step-by-step components
+
+## Ticket-Based Execution Mode
+- When a ticket has acceptance criteria, proceed without asking unless it affects architecture, security, or adds dependencies
+- Keep changes within ticket scope
 
 ---
 
