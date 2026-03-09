@@ -28,12 +28,34 @@ export interface AuditRun {
   findings: Findings | null;
 }
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function assertOk(res: Response, message: string): Promise<void> {
   if (res.ok) {
     return;
   }
 
-  throw new Error(message);
+  const status = res.status;
+  let errorMessage = `${message} (HTTP ${status})`;
+
+  try {
+    const text = await res.text();
+    if (text) {
+      errorMessage = text;
+    }
+  } catch {
+    // ignore
+  }
+
+  throw new ApiError(errorMessage, status);
 }
 
 export async function createAuditRun(repoUrl: string): Promise<AuditRun> {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 import type { AuditRun } from "../lib/api";
-import { createAuditRun, getAuditRuns, runPendingAudit } from "../lib/api";
+import { ApiError, createAuditRun, getAuditRuns, runPendingAudit } from "../lib/api";
 
 export default function Home() {
   // State for form input
@@ -22,6 +22,8 @@ export default function Home() {
   // Track which audit runs have expanded findings
   const [expandedFindings, setExpandedFindings] = useState<Set<string>>(new Set());
 
+  const dismissError = () => setError(null);
+
   // Fetch audit runs on page load
   useEffect(() => {
     fetchAuditRuns();
@@ -33,8 +35,21 @@ export default function Home() {
       const data = await getAuditRuns();
       setAuditRuns(data);
       setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const msg =
+          e.status === 0
+            ? "Network error. Please check your connection."
+            : e.status >= 500
+              ? "Server error. Please try again shortly."
+              : e.status === 404
+                ? "Service not found. Please check the API URL configuration."
+                : e.message || "Request failed.";
+
+        setError(msg);
+      } else {
+        setError("Unexpected error. Please try again.");
+      }
     }
   };
 
@@ -52,12 +67,26 @@ export default function Home() {
 
     try {
       await createAuditRun(repoUrl);
+      setError(null);
 
       // Clear input and refresh list
       setRepoUrl("");
       await fetchAuditRuns();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const msg =
+          e.status === 0
+            ? "Network error. Please check your connection."
+            : e.status >= 500
+              ? "Server error. Please try again shortly."
+              : e.status === 404
+                ? "Service not found. Please check the API URL configuration."
+                : e.message || "Request failed.";
+
+        setError(msg);
+      } else {
+        setError("Unexpected error. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -75,11 +104,25 @@ export default function Home() {
 
     try {
       await runPendingAudit(id);
+      setError(null);
 
       // Refresh the list to show updated status
       await fetchAuditRuns();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const msg =
+          e.status === 0
+            ? "Network error. Please check your connection."
+            : e.status >= 500
+              ? "Server error. Please try again shortly."
+              : e.status === 404
+                ? "Service not found. Please check the API URL configuration."
+                : e.message || "Request failed.";
+
+        setError(msg);
+      } else {
+        setError("Unexpected error. Please try again.");
+      }
     } finally {
       setRunningAuditId(null);
     }
@@ -165,13 +208,44 @@ export default function Home() {
               {isLoading ? "Starting..." : "Start Audit"}
             </button>
           </form>
-          {error && (
-            <p style={{ color: "red", marginTop: "0.5rem" }}>{error}</p>
-          )}
         </section>
 
         {/* Audit Runs List */}
         <section style={{ width: "100%", maxWidth: "800px" }}>
+          {error && (
+            <div
+              style={{
+                background: "#fee2e2",
+                border: "1px solid #fecaca",
+                color: "#991b1b",
+                padding: "10px 12px",
+                borderRadius: 8,
+                marginBottom: 12,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+              }}
+              role="alert"
+            >
+              <div>{error}</div>
+              <button
+                type="button"
+                onClick={dismissError}
+                style={{
+                  background: "transparent",
+                  border: "1px solid #fecaca",
+                  color: "#991b1b",
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                }}
+                aria-label="Dismiss error"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           <h2>Recent Audit Runs</h2>
           {auditRuns.length === 0 ? (
             <p>No audit runs yet. Start your first audit above!</p>
