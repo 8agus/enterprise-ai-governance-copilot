@@ -5,6 +5,19 @@ import styles from "./page.module.css";
 import type { AuditRun } from "../lib/api";
 import { ApiError, createAuditRun, getAuditRuns, runPendingAudit } from "../lib/api";
 
+const RESPONSIBLE_AI_TITLE_KEYWORDS = [
+  "responsible",
+  "governance",
+  "ai policy",
+  "model governance",
+  "evaluation",
+  "prompt injection",
+  "human review",
+  "content safety",
+];
+
+const PRIVACY_TITLE_KEYWORDS = ["privacy", "pii", "personal data", "gdpr", "data"]; 
+
 export default function Home() {
   // State for form input
   const [repoUrl, setRepoUrl] = useState("");
@@ -171,6 +184,20 @@ export default function Home() {
       }
       return newSet;
     });
+  };
+
+  const categorizeFinding = (title: string): "security" | "privacy" | "responsibleAi" => {
+    const lowerTitle = title.toLowerCase();
+
+    if (RESPONSIBLE_AI_TITLE_KEYWORDS.some((keyword) => lowerTitle.includes(keyword))) {
+      return "responsibleAi";
+    }
+
+    if (PRIVACY_TITLE_KEYWORDS.some((keyword) => lowerTitle.includes(keyword))) {
+      return "privacy";
+    }
+
+    return "security";
   };
 
   return (
@@ -352,40 +379,72 @@ export default function Home() {
                       
                       {expandedFindings.has(run.id) && (
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                          {run.findings.items.map((finding) => (
-                            <div
-                              key={finding.id}
-                              style={{
-                                padding: "0.75rem",
-                                backgroundColor: "#fff",
-                                borderRadius: "4px",
-                                border: "1px solid #e0e0e0",
-                              }}
-                            >
-                              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.5rem" }}>
-                                <span
-                                  style={{
-                                    padding: "0.125rem 0.5rem",
-                                    borderRadius: "4px",
-                                    backgroundColor: getSeverityColor(finding.severity),
-                                    color: "white",
-                                    fontSize: "0.75rem",
-                                    fontWeight: "bold",
-                                    textTransform: "uppercase",
-                                  }}
-                                >
-                                  {finding.severity}
-                                </span>
-                                <strong style={{ fontSize: "0.875rem" }}>{finding.title}</strong>
-                              </div>
-                              <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.25rem" }}>
-                                <strong>Evidence:</strong> {finding.evidence}
-                              </div>
-                              <div style={{ fontSize: "0.8rem", color: "#666" }}>
-                                <strong>Recommendation:</strong> {finding.recommendation}
-                              </div>
-                            </div>
-                          ))}
+                          {(() => {
+                            const securityFindings = run.findings.items.filter(
+                              (finding) => categorizeFinding(finding.title) === "security",
+                            );
+                            const privacyFindings = run.findings.items.filter(
+                              (finding) => categorizeFinding(finding.title) === "privacy",
+                            );
+                            const responsibleAiFindings = run.findings.items.filter(
+                              (finding) => categorizeFinding(finding.title) === "responsibleAi",
+                            );
+
+                            const sections = [
+                              { heading: "Security Findings", items: securityFindings },
+                              { heading: "Privacy Findings", items: privacyFindings },
+                              { heading: "Responsible AI Findings", items: responsibleAiFindings },
+                            ];
+
+                            return sections
+                              .filter((section) => section.items.length > 0)
+                              .map((section) => (
+                                <div key={section.heading} style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                                  <div style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#333" }}>{section.heading}</div>
+                                  {section.items.map((finding) => (
+                                    <div
+                                      key={finding.id}
+                                      style={{
+                                        padding: "0.75rem",
+                                        backgroundColor: "#fff",
+                                        borderRadius: "4px",
+                                        border: "1px solid #e0e0e0",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          gap: "0.5rem",
+                                          alignItems: "center",
+                                          marginBottom: "0.5rem",
+                                        }}
+                                      >
+                                        <span
+                                          style={{
+                                            padding: "0.125rem 0.5rem",
+                                            borderRadius: "4px",
+                                            backgroundColor: getSeverityColor(finding.severity),
+                                            color: "white",
+                                            fontSize: "0.75rem",
+                                            fontWeight: "bold",
+                                            textTransform: "uppercase",
+                                          }}
+                                        >
+                                          {finding.severity}
+                                        </span>
+                                        <strong style={{ fontSize: "0.875rem" }}>{finding.title}</strong>
+                                      </div>
+                                      <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.25rem" }}>
+                                        <strong>Evidence:</strong> {finding.evidence}
+                                      </div>
+                                      <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                                        <strong>Recommendation:</strong> {finding.recommendation}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ));
+                          })()}
                         </div>
                       )}
                     </div>
