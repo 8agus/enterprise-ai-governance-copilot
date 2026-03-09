@@ -25,6 +25,7 @@ export class SecurityScannerService {
 
   scanSampledFiles(sampledFiles: SampledRepoFile[]): SecurityFindings {
     const policy = this.policyLoader.loadBaselinePolicy();
+    const governancePolicies = this.policyLoader.getGovernancePolicies();
     const findings: SecurityFinding[] = [];
     const findingKeys = new Set<string>();
 
@@ -32,42 +33,46 @@ export class SecurityScannerService {
       const filePathLower = file.path.toLowerCase();
       const fileName = filePathLower.split("/").pop() ?? filePathLower;
 
-      for (const suspicious of policy.security.suspiciousFiles) {
-        const suspiciousLower = suspicious.toLowerCase();
-        const matched =
-          suspiciousLower === ".env"
-            ? fileName === ".env" || fileName.startsWith(".env.")
-            : fileName === suspiciousLower;
+      if (governancePolicies.security.dependency_vulnerabilities) {
+        for (const suspicious of policy.security.suspiciousFiles) {
+          const suspiciousLower = suspicious.toLowerCase();
+          const matched =
+            suspiciousLower === ".env"
+              ? fileName === ".env" || fileName.startsWith(".env.")
+              : fileName === suspiciousLower;
 
-        if (matched) {
-          this.addFinding(findings, findingKeys, {
-            severity: "high",
-            title: "Suspicious sensitive file exposed",
-            evidence: `Sampled file '${file.path}' matched suspicious file rule '${suspicious}'`,
-            recommendation: "Remove sensitive files from source control and rotate any exposed secrets.",
-          });
+          if (matched) {
+            this.addFinding(findings, findingKeys, {
+              severity: "high",
+              title: "Suspicious sensitive file exposed",
+              evidence: `Sampled file '${file.path}' matched suspicious file rule '${suspicious}'`,
+              recommendation: "Remove sensitive files from source control and rotate any exposed secrets.",
+            });
+          }
         }
       }
 
-      for (const rawPattern of policy.security.secretPatterns) {
-        const expression = this.toRegExp(rawPattern);
-        if (expression.test(file.path)) {
+      if (governancePolicies.security.hardcoded_secrets) {
+        for (const rawPattern of policy.security.secretPatterns) {
+          const expression = this.toRegExp(rawPattern);
+          if (expression.test(file.path)) {
+            this.addFinding(findings, findingKeys, {
+              severity: "medium",
+              title: "Potential secret pattern detected in file path",
+              evidence: `File path '${file.path}' matched secret pattern '${rawPattern}'`,
+              recommendation: "Review this file for secrets and move sensitive values to secure secret storage.",
+            });
+          }
+        }
+
+        if (/(credential|secret|token|password|api[_-]?key|private[_-]?key)/i.test(file.path)) {
           this.addFinding(findings, findingKeys, {
             severity: "medium",
-            title: "Potential secret pattern detected in file path",
-            evidence: `File path '${file.path}' matched secret pattern '${rawPattern}'`,
-            recommendation: "Review this file for secrets and move sensitive values to secure secret storage.",
+            title: "Filename suggests credential or secret storage",
+            evidence: `File path '${file.path}' contains sensitive naming indicators`,
+            recommendation: "Confirm this file does not contain hardcoded secrets or credentials.",
           });
         }
-      }
-
-      if (/(credential|secret|token|password|api[_-]?key|private[_-]?key)/i.test(file.path)) {
-        this.addFinding(findings, findingKeys, {
-          severity: "medium",
-          title: "Filename suggests credential or secret storage",
-          evidence: `File path '${file.path}' contains sensitive naming indicators`,
-          recommendation: "Confirm this file does not contain hardcoded secrets or credentials.",
-        });
       }
     }
 

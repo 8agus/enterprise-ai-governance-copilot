@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import type { SampledRepoFile } from "./github-ingestion.service";
+import { PolicyLoaderService } from "../policies/policy-loader.service";
 
 type FindingSeverity = "low" | "medium" | "high";
 type FindingCategory = "security" | "privacy" | "responsible-ai";
@@ -75,7 +76,10 @@ const HUMAN_REVIEW_INDICATORS = [
 
 @Injectable()
 export class ResponsibleAiScannerService {
+  constructor(private readonly policyLoader: PolicyLoaderService) {}
+
   scanSampledFiles(sampledFiles: SampledRepoFile[]): ResponsibleAiFindings {
+    const governancePolicies = this.policyLoader.getGovernancePolicies();
     const findings: ResponsibleAiFinding[] = [];
     const findingKeys = new Set<string>();
 
@@ -91,7 +95,7 @@ export class ResponsibleAiScannerService {
       return isDocumentationFile && this.containsAny(text, GOVERNANCE_DOC_INDICATORS);
     });
 
-    if (!hasGovernanceDocs) {
+    if (governancePolicies.responsible_ai.missing_governance_docs && !hasGovernanceDocs) {
       this.addFinding(findings, findingKeys, {
         severity: "medium",
         title: "Missing AI governance documentation",
@@ -103,7 +107,7 @@ export class ResponsibleAiScannerService {
     }
 
     const hasContentSafety = this.containsAny(combinedScanText, CONTENT_SAFETY_INDICATORS);
-    if (isAiRelated && !hasContentSafety) {
+    if (governancePolicies.responsible_ai.missing_content_safety && isAiRelated && !hasContentSafety) {
       this.addFinding(findings, findingKeys, {
         severity: hasPromptHandling ? "high" : "medium",
         title: "Missing content safety or moderation controls",
@@ -114,7 +118,7 @@ export class ResponsibleAiScannerService {
     }
 
     const hasEvaluationFramework = this.containsAny(combinedScanText, EVALUATION_INDICATORS);
-    if (!hasEvaluationFramework) {
+    if (governancePolicies.responsible_ai.missing_evaluation_framework && !hasEvaluationFramework) {
       this.addFinding(findings, findingKeys, {
         severity: "medium",
         title: "Missing evaluation framework",
@@ -129,7 +133,7 @@ export class ResponsibleAiScannerService {
         continue;
       }
 
-      if (this.hasPromptInjectionRisk(content)) {
+      if (governancePolicies.responsible_ai.prompt_injection_patterns && this.hasPromptInjectionRisk(content)) {
         this.addFinding(findings, findingKeys, {
           severity: "high",
           title: "Potential prompt injection risk pattern detected",
@@ -142,7 +146,7 @@ export class ResponsibleAiScannerService {
     }
 
     const hasHumanReviewProcess = this.containsAny(combinedScanText, HUMAN_REVIEW_INDICATORS);
-    if (isAiRelated && !hasHumanReviewProcess) {
+    if (governancePolicies.responsible_ai.missing_human_review && isAiRelated && !hasHumanReviewProcess) {
       this.addFinding(findings, findingKeys, {
         severity: "medium",
         title: "Missing human review or approval process",

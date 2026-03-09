@@ -25,8 +25,16 @@ export class PrivacyScannerService {
 
   scanSampledFiles(sampledFiles: SampledRepoFile[]): PrivacyFindings {
     const policy = this.policyLoader.loadBaselinePolicy();
+    const governancePolicies = this.policyLoader.getGovernancePolicies();
     const findings: PrivacyFinding[] = [];
     const findingKeys = new Set<string>();
+
+    if (!governancePolicies.privacy.pii_detection) {
+      return {
+        summary: { total: 0, high: 0, medium: 0, low: 0 },
+        items: [],
+      };
+    }
 
     for (const file of sampledFiles) {
       const lowerPath = file.path.toLowerCase();

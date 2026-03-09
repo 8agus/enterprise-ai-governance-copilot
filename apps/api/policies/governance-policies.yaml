@@ -1,0 +1,14 @@
+policies:
+  security:
+    dependency_vulnerabilities: true
+    hardcoded_secrets: true
+
+  privacy:
+    pii_detection: true
+
+  responsible_ai:
+    missing_governance_docs: true
+    missing_content_safety: true
+    missing_evaluation_framework: true
+    prompt_injection_patterns: true
+    missing_human_review: true
