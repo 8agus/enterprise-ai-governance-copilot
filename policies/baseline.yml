@@ -1,0 +1,26 @@
+security:
+  secretPatterns:
+    - "AKIA[0-9A-Z]{16}"
+    - "(?i)api[_-]?key"
+    - "(?i)secret[_-]?token"
+  suspiciousFiles:
+    - ".env"
+    - "id_rsa"
+    - "secrets.txt"
+
+privacy:
+  piiPatterns:
+    - "(?i)email"
+    - "(?i)phone"
+    - "(?i)ssn"
+  loggingPatterns:
+    - "(?i)console\\.log\\(.*password"
+    - "(?i)log\\(.*token"
+
+responsible_ai:
+  requiredFiles:
+    - "README.md"
+    - "POLICY.md"
+  recommendedConfigPatterns:
+    - "(?i)human[_-]?review"
+    - "(?i)content[_-]?filter"
