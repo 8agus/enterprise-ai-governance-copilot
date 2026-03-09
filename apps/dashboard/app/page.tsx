@@ -25,6 +25,8 @@ type ComparableRun = AuditRun & {
   };
 };
 
+type ReportFinding = NonNullable<AuditRun["findings"]>["items"][number];
+
 const createEmptyHeatmap = (): HeatmapMatrix => ({
   security: { high: 0, medium: 0, low: 0 },
   privacy: { high: 0, medium: 0, low: 0 },
@@ -308,6 +310,87 @@ export default function Home() {
     }
 
     return `Risk worsened from ${baselineRisk} to ${comparisonRisk}.`;
+  };
+
+  const buildReportText = (run: ComparableRun): string => {
+    const findings = run.findings;
+    const summary = findings.summary;
+    const auditSummary = findings.auditSummary;
+
+    const groupedFindings = findings.items.reduce<Record<FindingCategory, ReportFinding[]>>(
+      (groups, finding) => {
+        groups[finding.category].push(finding);
+        return groups;
+      },
+      { security: [], privacy: [], "responsible-ai": [] },
+    );
+
+    const heatmap = findings.items.reduce<HeatmapMatrix>((matrix, finding) => {
+      matrix[finding.category][finding.severity] += 1;
+      return matrix;
+    }, createEmptyHeatmap());
+
+    const lines: string[] = [
+      "Enterprise AI Governance Copilot - Audit Report",
+      `Generated: ${new Date().toLocaleString()}`,
+      `Run ID: ${run.id}`,
+      `Repository: ${run.repoUrl}`,
+      `Audit Date: ${formatDate(run.createdAt)}`,
+      "",
+      "Executive Summary",
+      `- Score: ${auditSummary.score}`,
+      `- Risk Level: ${auditSummary.riskLevel}`,
+      `- Total Findings: ${auditSummary.totalFindings}`,
+      `- High: ${auditSummary.highCount}`,
+      `- Medium: ${auditSummary.mediumCount}`,
+      `- Low: ${auditSummary.lowCount}`,
+      "",
+      "Findings Summary",
+      `- Total: ${summary.total}`,
+      `- High: ${summary.high}`,
+      `- Medium: ${summary.medium}`,
+      `- Low: ${summary.low}`,
+      "",
+      "Governance Heatmap Summary",
+      `- Security: High ${heatmap.security.high}, Medium ${heatmap.security.medium}, Low ${heatmap.security.low}`,
+      `- Privacy: High ${heatmap.privacy.high}, Medium ${heatmap.privacy.medium}, Low ${heatmap.privacy.low}`,
+      `- Responsible AI: High ${heatmap["responsible-ai"].high}, Medium ${heatmap["responsible-ai"].medium}, Low ${heatmap["responsible-ai"].low}`,
+      "",
+    ];
+
+    HEATMAP_CATEGORIES.forEach((category) => {
+      const sectionFindings = groupedFindings[category];
+      lines.push(`${getCategoryLabel(category)} Findings`);
+
+      if (sectionFindings.length === 0) {
+        lines.push("No findings.");
+        lines.push("");
+        return;
+      }
+
+      sectionFindings.forEach((finding, index) => {
+        lines.push(`${index + 1}. [${finding.severity}] ${finding.title}`);
+        lines.push(`   Evidence: ${finding.evidence}`);
+        lines.push(`   Recommendation: ${finding.recommendation}`);
+      });
+      lines.push("");
+    });
+
+    return lines.join("\n");
+  };
+
+  const downloadAuditReport = (run: ComparableRun) => {
+    const reportText = buildReportText(run);
+    const blob = new Blob([reportText], { type: "text/plain;charset=utf-8" });
+    const downloadUrl = URL.createObjectURL(blob);
+
+    const anchor = document.createElement("a");
+    anchor.href = downloadUrl;
+    anchor.download = `audit-report-${run.id}.txt`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(downloadUrl);
   };
 
   const completedTrendRuns: TrendRun[] = auditRuns
@@ -740,6 +823,45 @@ export default function Home() {
                   }}
                 >
                   {(() => {
+                    const exportableRun = comparableRuns.find((candidate) => candidate.id === run.id) ?? null;
+
+                    return (
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                        <strong>{run.repoUrl}</strong>
+                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                          {exportableRun ? (
+                            <button
+                              onClick={() => downloadAuditReport(exportableRun)}
+                              style={{
+                                padding: "0.25rem 0.6rem",
+                                fontSize: "0.75rem",
+                                backgroundColor: "#495057",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                              }}
+                            >
+                              Export Report
+                            </button>
+                          ) : null}
+                          <span
+                            style={{
+                              padding: "0.25rem 0.5rem",
+                              borderRadius: "4px",
+                              backgroundColor: getStatusColor(run.status),
+                              color: "white",
+                              fontSize: "0.875rem",
+                            }}
+                          >
+                            {run.status}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {(() => {
                     const heatmap = buildHeatmap(run);
                     return heatmap ? (
                       <div
@@ -814,20 +936,6 @@ export default function Home() {
                     ) : null;
                   })()}
 
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                    <strong>{run.repoUrl}</strong>
-                    <span
-                      style={{
-                        padding: "0.25rem 0.5rem",
-                        borderRadius: "4px",
-                        backgroundColor: getStatusColor(run.status),
-                        color: "white",
-                        fontSize: "0.875rem",
-                      }}
-                    >
-                      {run.status}
-                    </span>
-                  </div>
                   <div style={{ fontSize: "0.875rem", color: "#666", marginBottom: "0.5rem" }}>
                     <div>ID: {run.id}</div>
                     <div>Created: {formatDate(run.createdAt)}</div>
