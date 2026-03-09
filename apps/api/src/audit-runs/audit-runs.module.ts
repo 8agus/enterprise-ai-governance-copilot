@@ -5,6 +5,7 @@ import { PrismaModule } from "../prisma/prisma.module";
 import { GithubIngestionService } from "./github-ingestion.service";
 import { SecurityScannerService } from "./security-scanner.service";
 import { PrivacyScannerService } from "./privacy-scanner.service";
+import { ResponsibleAiScannerService } from "./responsible-ai-scanner.service";
 import { PolicyLoaderService } from "../policies/policy-loader.service";
 import { ScoringService } from "./scoring.service";
 
@@ -16,6 +17,7 @@ import { ScoringService } from "./scoring.service";
     GithubIngestionService,
     SecurityScannerService,
     PrivacyScannerService,
+    ResponsibleAiScannerService,
     PolicyLoaderService,
     ScoringService,
   ],

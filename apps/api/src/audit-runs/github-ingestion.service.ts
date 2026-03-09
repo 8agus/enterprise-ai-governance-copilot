@@ -18,16 +18,23 @@ type GitHubTreeResponse = {
   truncated: boolean;
 };
 
+type GitHubContentResponse = {
+  content?: string;
+  encoding?: string;
+};
+
 export type SampledRepoFile = {
   path: string;
   type: string;
   size: number | null;
   reasonSelected: string;
+  content: string | null;
 };
 
 type RankedFile = SampledRepoFile & { score: number };
 
 const MAX_SAMPLED_FILES = 20;
+const MAX_CONTENT_BYTES = 30_000;
 
 @Injectable()
 export class GithubIngestionService {
@@ -41,10 +48,19 @@ export class GithubIngestionService {
       .map((item) => this.rankFile(item))
       .filter((item): item is RankedFile => item !== null)
       .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path))
-      .slice(0, MAX_SAMPLED_FILES)
-      .map(({ score, ...file }) => file);
+      .slice(0, MAX_SAMPLED_FILES);
 
-    return ranked;
+    const sampled = await Promise.all(
+      ranked.map(async (rankedFile) => ({
+        path: rankedFile.path,
+        type: rankedFile.type,
+        size: rankedFile.size,
+        reasonSelected: rankedFile.reasonSelected,
+        content: await this.fetchFileContent(owner, repo, branch, rankedFile.path, rankedFile.size),
+      })),
+    );
+
+    return sampled;
   }
 
   private parseOwnerRepo(repoUrl: string): { owner: string; repo: string } {
@@ -110,6 +126,44 @@ export class GithubIngestionService {
     return data.tree;
   }
 
+  private async fetchFileContent(
+    owner: string,
+    repo: string,
+    branch: string,
+    path: string,
+    size: number | null,
+  ): Promise<string | null> {
+    if (typeof size === "number" && size > MAX_CONTENT_BYTES) {
+      return null;
+    }
+
+    const encodedPath = path
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`;
+    const response = await fetch(url, {
+      headers: { "User-Agent": "enterprise-ai-governance-copilot" },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as GitHubContentResponse;
+    if (data.encoding !== "base64" || typeof data.content !== "string") {
+      return null;
+    }
+
+    try {
+      const decoded = Buffer.from(data.content, "base64").toString("utf-8");
+      return decoded.slice(0, MAX_CONTENT_BYTES);
+    } catch {
+      return null;
+    }
+  }
+
   private rankFile(item: GitHubTreeItem): RankedFile | null {
     const path = item.path;
     const lowerPath = path.toLowerCase();
@@ -168,6 +222,7 @@ export class GithubIngestionService {
       type: item.type,
       size: typeof item.size === "number" ? item.size : null,
       reasonSelected: match.reason,
+      content: null,
       score: match.score,
     };
   }

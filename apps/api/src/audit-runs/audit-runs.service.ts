@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { GithubIngestionService } from "./github-ingestion.service";
 import { SecurityScannerService } from "./security-scanner.service";
 import { PrivacyScannerService } from "./privacy-scanner.service";
+import { ResponsibleAiScannerService } from "./responsible-ai-scanner.service";
 import { ScoringService } from "./scoring.service";
 
 type FindingSeverity = "low" | "medium" | "high";
@@ -25,6 +26,7 @@ export class AuditRunsService {
     private readonly githubIngestion: GithubIngestionService,
     private readonly securityScanner: SecurityScannerService,
     private readonly privacyScanner: PrivacyScannerService,
+    private readonly responsibleAiScanner: ResponsibleAiScannerService,
     private readonly scoring: ScoringService,
   ) {}
 
@@ -60,7 +62,8 @@ export class AuditRunsService {
       // Deterministic MVP security checks with policy-driven rules.
       const securityFindings = this.securityScanner.scanSampledFiles(sampledFiles);
       const privacyFindings = this.privacyScanner.scanSampledFiles(sampledFiles);
-      const findings = this.mergeFindings(securityFindings, privacyFindings);
+      const responsibleAiFindings = this.responsibleAiScanner.scanSampledFiles(sampledFiles);
+      const findings = this.mergeFindings(securityFindings, privacyFindings, responsibleAiFindings);
       const auditSummary = this.scoring.calculate(findings);
 
       // Simulate audit work (2 seconds)
@@ -81,8 +84,8 @@ export class AuditRunsService {
     }
   }
 
-  private mergeFindings(first: Findings, second: Findings): Findings {
-    const mergedItems = [...first.items, ...second.items].map((item, index) => ({
+  private mergeFindings(...collections: Findings[]): Findings {
+    const mergedItems = collections.flatMap((collection) => collection.items).map((item, index) => ({
       ...item,
       id: String(index + 1),
     }));
