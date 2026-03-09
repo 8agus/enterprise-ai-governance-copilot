@@ -19,6 +19,12 @@ type TrendRun = {
   totalFindings: number;
 };
 
+type ComparableRun = AuditRun & {
+  findings: NonNullable<AuditRun["findings"]> & {
+    auditSummary: NonNullable<NonNullable<AuditRun["findings"]>["auditSummary"]>;
+  };
+};
+
 const createEmptyHeatmap = (): HeatmapMatrix => ({
   security: { high: 0, medium: 0, low: 0 },
   privacy: { high: 0, medium: 0, low: 0 },
@@ -62,6 +68,8 @@ export default function Home() {
   
   // Track which audit runs have expanded findings
   const [expandedFindings, setExpandedFindings] = useState<Set<string>>(new Set());
+  const [baselineRunId, setBaselineRunId] = useState<string>("");
+  const [comparisonRunId, setComparisonRunId] = useState<string>("");
 
   const dismissError = () => setError(null);
 
@@ -235,6 +243,71 @@ export default function Home() {
       matrix[finding.category][finding.severity] += 1;
       return matrix;
     }, createEmptyHeatmap());
+  };
+
+  const comparableRuns: ComparableRun[] = auditRuns
+    .filter(
+      (run): run is ComparableRun =>
+        run.status === "completed" &&
+        run.findings !== null &&
+        run.findings.auditSummary !== undefined,
+    )
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  useEffect(() => {
+    if (comparableRuns.length < 2) {
+      setBaselineRunId("");
+      setComparisonRunId("");
+      return;
+    }
+
+    const latest = comparableRuns[0];
+    const previous = comparableRuns[1];
+
+    if (!latest || !previous) {
+      return;
+    }
+
+    const baselineExists = comparableRuns.some((run) => run.id === baselineRunId);
+    const comparisonExists = comparableRuns.some((run) => run.id === comparisonRunId);
+
+    if (!baselineExists || !comparisonExists || baselineRunId === comparisonRunId) {
+      setBaselineRunId(previous.id);
+      setComparisonRunId(latest.id);
+    }
+  }, [comparableRuns, baselineRunId, comparisonRunId]);
+
+  const baselineRun = comparableRuns.find((run) => run.id === baselineRunId) ?? null;
+  const comparisonRun = comparableRuns.find((run) => run.id === comparisonRunId) ?? null;
+
+  const getCategoryCounts = (run: ComparableRun): Record<FindingCategory, number> => {
+    return run.findings.items.reduce<Record<FindingCategory, number>>(
+      (counts, finding) => {
+        counts[finding.category] += 1;
+        return counts;
+      },
+      { security: 0, privacy: 0, "responsible-ai": 0 },
+    );
+  };
+
+  const formatSignedDelta = (value: number): string => (value > 0 ? `+${value}` : String(value));
+
+  const getComparisonRiskText = (baseline: ComparableRun, comparison: ComparableRun): string => {
+    const baselineRisk = baseline.findings.auditSummary.riskLevel;
+    const comparisonRisk = comparison.findings.auditSummary.riskLevel;
+
+    if (baselineRisk === comparisonRisk) {
+      return `Risk unchanged at ${comparisonRisk}.`;
+    }
+
+    const baselineRank = toRiskRank(baselineRisk);
+    const comparisonRank = toRiskRank(comparisonRisk);
+
+    if (comparisonRank < baselineRank) {
+      return `Risk improved from ${baselineRisk} to ${comparisonRisk}.`;
+    }
+
+    return `Risk worsened from ${baselineRisk} to ${comparisonRisk}.`;
   };
 
   const completedTrendRuns: TrendRun[] = auditRuns
@@ -416,6 +489,186 @@ export default function Home() {
                 </div>
               ) : (
                 <div style={{ fontSize: "0.82rem", color: "#666" }}>{getRiskChangeSummary()}</div>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section style={{ width: "100%", maxWidth: "800px", marginBottom: "1rem" }}>
+          <h2>Compare Audit Runs</h2>
+          {comparableRuns.length < 2 ? (
+            <p style={{ fontSize: "0.9rem", color: "#666" }}>
+              Comparison requires at least 2 completed audit runs with summary data.
+            </p>
+          ) : (
+            <div
+              style={{
+                backgroundColor: "#fff",
+                border: "1px solid #e0e0e0",
+                borderRadius: "8px",
+                padding: "0.75rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.75rem",
+              }}
+            >
+              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.82rem" }}>
+                  Baseline Run
+                  <select
+                    value={baselineRunId}
+                    onChange={(e) => {
+                      const nextBaselineId = e.target.value;
+                      setBaselineRunId(nextBaselineId);
+                      if (nextBaselineId === comparisonRunId) {
+                        const alternate = comparableRuns.find((run) => run.id !== nextBaselineId);
+                        setComparisonRunId(alternate?.id ?? "");
+                      }
+                    }}
+                    style={{ padding: "0.35rem", border: "1px solid #ccc", borderRadius: "4px", minWidth: "260px" }}
+                  >
+                    {comparableRuns
+                      .filter((run) => run.id !== comparisonRunId)
+                      .map((run) => (
+                        <option key={run.id} value={run.id}>
+                          {formatDate(run.createdAt)} - {run.repoUrl}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+
+                <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.82rem" }}>
+                  Comparison Run
+                  <select
+                    value={comparisonRunId}
+                    onChange={(e) => {
+                      const nextComparisonId = e.target.value;
+                      setComparisonRunId(nextComparisonId);
+                      if (nextComparisonId === baselineRunId) {
+                        const alternate = comparableRuns.find((run) => run.id !== nextComparisonId);
+                        setBaselineRunId(alternate?.id ?? "");
+                      }
+                    }}
+                    style={{ padding: "0.35rem", border: "1px solid #ccc", borderRadius: "4px", minWidth: "260px" }}
+                  >
+                    {comparableRuns
+                      .filter((run) => run.id !== baselineRunId)
+                      .map((run) => (
+                        <option key={run.id} value={run.id}>
+                          {formatDate(run.createdAt)} - {run.repoUrl}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </div>
+
+              {baselineRun && comparisonRun && baselineRun.id !== comparisonRun.id ? (
+                (() => {
+                  const baselineSummary = baselineRun.findings.auditSummary;
+                  const comparisonSummary = comparisonRun.findings.auditSummary;
+
+                  const scoreDeltaValue = comparisonSummary.score - baselineSummary.score;
+                  const totalFindingsDeltaValue = comparisonSummary.totalFindings - baselineSummary.totalFindings;
+                  const highDeltaValue = comparisonSummary.highCount - baselineSummary.highCount;
+                  const mediumDeltaValue = comparisonSummary.mediumCount - baselineSummary.mediumCount;
+                  const lowDeltaValue = comparisonSummary.lowCount - baselineSummary.lowCount;
+
+                  const baselineCategory = getCategoryCounts(baselineRun);
+                  const comparisonCategory = getCategoryCounts(comparisonRun);
+
+                  const categoryRows: Array<{ key: FindingCategory; label: string }> = [
+                    { key: "security", label: "Security" },
+                    { key: "privacy", label: "Privacy" },
+                    { key: "responsible-ai", label: "Responsible AI" },
+                  ];
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: "left", padding: "0.35rem", borderBottom: "1px solid #e6e6e6" }}>Metric</th>
+                            <th style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #e6e6e6" }}>Baseline</th>
+                            <th style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #e6e6e6" }}>Comparison</th>
+                            <th style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #e6e6e6" }}>Delta</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td style={{ padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>Score</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{baselineSummary.score}</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{comparisonSummary.score}</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0", fontWeight: 600, color: scoreDeltaValue >= 0 ? "#157347" : "#b02a37" }}>
+                              {formatSignedDelta(scoreDeltaValue)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>Risk Level</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0", textTransform: "capitalize" }}>{baselineSummary.riskLevel}</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0", textTransform: "capitalize" }}>{comparisonSummary.riskLevel}</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>-</td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>Total Findings</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{baselineSummary.totalFindings}</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{comparisonSummary.totalFindings}</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0", fontWeight: 600, color: totalFindingsDeltaValue <= 0 ? "#157347" : "#b02a37" }}>
+                              {formatSignedDelta(totalFindingsDeltaValue)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>High Severity</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{baselineSummary.highCount}</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{comparisonSummary.highCount}</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0", fontWeight: 600, color: highDeltaValue <= 0 ? "#157347" : "#b02a37" }}>
+                              {formatSignedDelta(highDeltaValue)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>Medium Severity</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{baselineSummary.mediumCount}</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{comparisonSummary.mediumCount}</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0", fontWeight: 600, color: mediumDeltaValue <= 0 ? "#157347" : "#b02a37" }}>
+                              {formatSignedDelta(mediumDeltaValue)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>Low Severity</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{baselineSummary.lowCount}</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{comparisonSummary.lowCount}</td>
+                            <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0", fontWeight: 600, color: lowDeltaValue <= 0 ? "#157347" : "#b02a37" }}>
+                              {formatSignedDelta(lowDeltaValue)}
+                            </td>
+                          </tr>
+                          {categoryRows.map((categoryRow) => {
+                            const baselineValue = baselineCategory[categoryRow.key];
+                            const comparisonValue = comparisonCategory[categoryRow.key];
+                            const delta = comparisonValue - baselineValue;
+
+                            return (
+                              <tr key={categoryRow.key}>
+                                <td style={{ padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{categoryRow.label}</td>
+                                <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{baselineValue}</td>
+                                <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>{comparisonValue}</td>
+                                <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0", fontWeight: 600, color: delta <= 0 ? "#157347" : "#b02a37" }}>
+                                  {formatSignedDelta(delta)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+
+                      <div style={{ fontSize: "0.82rem", color: "#333" }}>
+                        <strong>{getComparisonRiskText(baselineRun, comparisonRun)}</strong>
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div style={{ fontSize: "0.82rem", color: "#666" }}>
+                  Select two different runs to view comparison.
+                </div>
               )}
             </div>
           )}
