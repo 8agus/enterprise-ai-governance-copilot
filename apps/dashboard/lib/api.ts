@@ -2,6 +2,16 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 export type FindingSeverity = "low" | "medium" | "high";
 export type FindingCategory = "security" | "privacy" | "responsible-ai";
+export type RiskLevel = "low" | "moderate" | "high";
+
+export interface AuditSummary {
+  score: number;
+  riskLevel: RiskLevel;
+  totalFindings: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+}
 
 export interface Findings {
   summary: {
@@ -18,6 +28,7 @@ export interface Findings {
     evidence: string;
     recommendation: string;
   }>;
+  auditSummary?: AuditSummary;
 }
 
 export type AuditRunStatus = "pending" | "running" | "completed";

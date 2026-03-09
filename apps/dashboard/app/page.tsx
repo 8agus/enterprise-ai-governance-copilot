@@ -2,13 +2,22 @@
 
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
-import type { AuditRun, FindingCategory, FindingSeverity } from "../lib/api";
+import type { AuditRun, FindingCategory, FindingSeverity, RiskLevel } from "../lib/api";
 import { ApiError, createAuditRun, getAuditRuns, runPendingAudit } from "../lib/api";
 
 const HEATMAP_CATEGORIES: FindingCategory[] = ["security", "privacy", "responsible-ai"];
 const HEATMAP_SEVERITIES: FindingSeverity[] = ["high", "medium", "low"];
 
 type HeatmapMatrix = Record<FindingCategory, Record<FindingSeverity, number>>;
+
+type TrendRun = {
+  id: string;
+  repoUrl: string;
+  createdAt: string;
+  score: number;
+  riskLevel: RiskLevel;
+  totalFindings: number;
+};
 
 const createEmptyHeatmap = (): HeatmapMatrix => ({
   security: { high: 0, medium: 0, low: 0 },
@@ -22,6 +31,18 @@ const getCategoryLabel = (category: FindingCategory): string => {
   }
 
   return category.charAt(0).toUpperCase() + category.slice(1);
+};
+
+const toRiskRank = (riskLevel: RiskLevel): number => {
+  if (riskLevel === "high") {
+    return 3;
+  }
+
+  if (riskLevel === "moderate") {
+    return 2;
+  }
+
+  return 1;
 };
 
 export default function Home() {
@@ -179,6 +200,19 @@ export default function Home() {
     }
   };
 
+  const getRiskLevelColor = (riskLevel: RiskLevel) => {
+    switch (riskLevel) {
+      case "high":
+        return "#dc3545";
+      case "moderate":
+        return "#ffc107";
+      case "low":
+        return "#28a745";
+      default:
+        return "#6c757d";
+    }
+  };
+
   // Toggle findings visibility for a specific audit run
   const toggleFindings = (id: string) => {
     setExpandedFindings((prev) => {
@@ -201,6 +235,54 @@ export default function Home() {
       matrix[finding.category][finding.severity] += 1;
       return matrix;
     }, createEmptyHeatmap());
+  };
+
+  const completedTrendRuns: TrendRun[] = auditRuns
+    .filter((run) => run.status === "completed" && Boolean(run.findings?.auditSummary))
+    .map((run) => {
+      const summary = run.findings?.auditSummary;
+
+      if (!summary) {
+        return null;
+      }
+
+      return {
+        id: run.id,
+        repoUrl: run.repoUrl,
+        createdAt: run.createdAt,
+        score: summary.score,
+        riskLevel: summary.riskLevel,
+        totalFindings: summary.totalFindings,
+      };
+    })
+    .filter((run): run is TrendRun => run !== null)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  const trendRowsForDisplay = [...completedTrendRuns].reverse();
+  const latestTrendRun = completedTrendRuns.at(-1) ?? null;
+  const previousTrendRun = completedTrendRuns.at(-2) ?? null;
+
+  const scoreDelta = latestTrendRun && previousTrendRun ? latestTrendRun.score - previousTrendRun.score : null;
+  const findingsDelta =
+    latestTrendRun && previousTrendRun ? latestTrendRun.totalFindings - previousTrendRun.totalFindings : null;
+
+  const getRiskChangeSummary = (): string => {
+    if (!latestTrendRun || !previousTrendRun) {
+      return "Trend comparison requires at least 2 completed audit runs.";
+    }
+
+    if (latestTrendRun.riskLevel === previousTrendRun.riskLevel) {
+      return `Risk unchanged at ${latestTrendRun.riskLevel}.`;
+    }
+
+    const latestRank = toRiskRank(latestTrendRun.riskLevel);
+    const previousRank = toRiskRank(previousTrendRun.riskLevel);
+
+    if (latestRank < previousRank) {
+      return `Risk improved from ${previousTrendRun.riskLevel} to ${latestTrendRun.riskLevel}.`;
+    }
+
+    return `Risk worsened from ${previousTrendRun.riskLevel} to ${latestTrendRun.riskLevel}.`;
   };
 
   return (
@@ -242,6 +324,101 @@ export default function Home() {
               {isLoading ? "Starting..." : "Start Audit"}
             </button>
           </form>
+        </section>
+
+        <section style={{ width: "100%", maxWidth: "800px", marginBottom: "1rem" }}>
+          <h2>Audit History &amp; Trends</h2>
+          {trendRowsForDisplay.length === 0 ? (
+            <p style={{ fontSize: "0.9rem", color: "#666" }}>No completed audit runs yet to display history.</p>
+          ) : (
+            <div
+              style={{
+                backgroundColor: "#fff",
+                border: "1px solid #e0e0e0",
+                borderRadius: "8px",
+                padding: "0.75rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.75rem",
+              }}
+            >
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left", padding: "0.35rem", borderBottom: "1px solid #e6e6e6" }}>Run / Repo</th>
+                    <th style={{ textAlign: "left", padding: "0.35rem", borderBottom: "1px solid #e6e6e6" }}>Date</th>
+                    <th style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #e6e6e6" }}>Score</th>
+                    <th style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #e6e6e6" }}>Risk Level</th>
+                    <th style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #e6e6e6" }}>Total Findings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trendRowsForDisplay.map((run) => (
+                    <tr key={run.id}>
+                      <td style={{ padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>
+                        <div style={{ fontWeight: 600 }}>{run.repoUrl}</div>
+                        <div style={{ color: "#777", fontSize: "0.74rem" }}>Run {run.id}</div>
+                      </td>
+                      <td style={{ padding: "0.35rem", borderBottom: "1px solid #f0f0f0", color: "#555" }}>
+                        {formatDate(run.createdAt)}
+                      </td>
+                      <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0", fontWeight: 600 }}>
+                        {run.score}
+                      </td>
+                      <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0" }}>
+                        <span
+                          style={{
+                            backgroundColor: getRiskLevelColor(run.riskLevel),
+                            color: "white",
+                            borderRadius: "10px",
+                            padding: "0.15rem 0.45rem",
+                            fontSize: "0.73rem",
+                            textTransform: "capitalize",
+                          }}
+                        >
+                          {run.riskLevel}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "center", padding: "0.35rem", borderBottom: "1px solid #f0f0f0", fontWeight: 600 }}>
+                        {run.totalFindings}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {latestTrendRun && previousTrendRun ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "0.75rem",
+                    alignItems: "center",
+                    fontSize: "0.82rem",
+                    color: "#333",
+                  }}
+                >
+                  <div>
+                    <strong>Score Delta:</strong>{" "}
+                    <span style={{ color: (scoreDelta ?? 0) >= 0 ? "#157347" : "#b02a37", fontWeight: 600 }}>
+                      {scoreDelta !== null && scoreDelta >= 0 ? `+${scoreDelta}` : scoreDelta}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>Findings Delta:</strong>{" "}
+                    <span style={{ color: (findingsDelta ?? 0) <= 0 ? "#157347" : "#b02a37", fontWeight: 600 }}>
+                      {findingsDelta !== null && findingsDelta >= 0 ? `+${findingsDelta}` : findingsDelta}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>{getRiskChangeSummary()}</strong>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: "0.82rem", color: "#666" }}>{getRiskChangeSummary()}</div>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Audit Runs List */}
