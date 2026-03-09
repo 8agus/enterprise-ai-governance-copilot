@@ -14,6 +14,7 @@ export default function Home() {
   
   // State for loading and error handling
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingRuns, setIsFetchingRuns] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // Track which audit run is currently being executed
@@ -31,6 +32,7 @@ export default function Home() {
 
   // Function to fetch all audit runs from API
   const fetchAuditRuns = async () => {
+    setIsFetchingRuns(true);
     try {
       const data = await getAuditRuns();
       setAuditRuns(data);
@@ -50,6 +52,8 @@ export default function Home() {
       } else {
         setError("Unexpected error. Please try again.");
       }
+    } finally {
+      setIsFetchingRuns(false);
     }
   };
 
@@ -194,7 +198,7 @@ export default function Home() {
             />
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isFetchingRuns || runningAuditId !== null}
               style={{
                 padding: "0.5rem 1rem",
                 fontSize: "1rem",
@@ -202,7 +206,7 @@ export default function Home() {
                 color: "white",
                 border: "none",
                 borderRadius: "4px",
-                cursor: isLoading ? "not-allowed" : "pointer",
+                cursor: isLoading || isFetchingRuns || runningAuditId !== null ? "not-allowed" : "pointer",
               }}
             >
               {isLoading ? "Starting..." : "Start Audit"}
@@ -212,6 +216,20 @@ export default function Home() {
 
         {/* Audit Runs List */}
         <section style={{ width: "100%", maxWidth: "800px" }}>
+          {isFetchingRuns && (
+            <div
+              style={{
+                background: "#e6f0ff",
+                border: "1px solid #bfdbfe",
+                color: "#1d4ed8",
+                padding: "10px 12px",
+                borderRadius: 8,
+                marginBottom: 12,
+              }}
+            >
+              Loading latest audit runs...
+            </div>
+          )}
           {error && (
             <div
               style={{
@@ -282,7 +300,7 @@ export default function Home() {
                   {run.status === "pending" && (
                     <button
                       onClick={() => handleRunNow(run.id)}
-                      disabled={runningAuditId === run.id}
+                      disabled={runningAuditId !== null || isLoading || isFetchingRuns}
                       style={{
                         padding: "0.5rem 1rem",
                         fontSize: "0.875rem",
@@ -290,8 +308,8 @@ export default function Home() {
                         color: "white",
                         border: "none",
                         borderRadius: "4px",
-                        cursor: runningAuditId === run.id ? "not-allowed" : "pointer",
-                        opacity: runningAuditId === run.id ? 0.6 : 1,
+                        cursor: runningAuditId !== null || isLoading || isFetchingRuns ? "not-allowed" : "pointer",
+                        opacity: runningAuditId !== null || isLoading || isFetchingRuns ? 0.6 : 1,
                       }}
                     >
                       {runningAuditId === run.id ? "Running..." : "Run Now"}
