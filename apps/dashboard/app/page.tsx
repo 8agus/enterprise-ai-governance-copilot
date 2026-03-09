@@ -27,6 +27,15 @@ type ComparableRun = AuditRun & {
 
 type ReportFinding = NonNullable<AuditRun["findings"]>["items"][number];
 
+type FindingFilterCategory = "all" | FindingCategory;
+type FindingFilterSeverity = "all" | FindingSeverity;
+
+type FindingFilters = {
+  category: FindingFilterCategory;
+  severity: FindingFilterSeverity;
+  keyword: string;
+};
+
 const createEmptyHeatmap = (): HeatmapMatrix => ({
   security: { high: 0, medium: 0, low: 0 },
   privacy: { high: 0, medium: 0, low: 0 },
@@ -75,6 +84,9 @@ export default function Home() {
   const [expandedFindings, setExpandedFindings] = useState<Set<string>>(new Set());
   const [baselineRunId, setBaselineRunId] = useState<string>("");
   const [comparisonRunId, setComparisonRunId] = useState<string>("");
+  const [findingFilterCategory, setFindingFilterCategory] = useState<FindingFilterCategory>("all");
+  const [findingFilterSeverity, setFindingFilterSeverity] = useState<FindingFilterSeverity>("all");
+  const [findingSearchTerm, setFindingSearchTerm] = useState<string>("");
 
   const dismissError = () => setError(null);
 
@@ -273,6 +285,27 @@ export default function Home() {
       matrix[finding.category][finding.severity] += 1;
       return matrix;
     }, createEmptyHeatmap());
+  };
+
+  const filterFindings = (items: ReportFinding[], filters: FindingFilters): ReportFinding[] => {
+    const keyword = filters.keyword.trim().toLowerCase();
+
+    return items.filter((finding) => {
+      if (filters.category !== "all" && finding.category !== filters.category) {
+        return false;
+      }
+
+      if (filters.severity !== "all" && finding.severity !== filters.severity) {
+        return false;
+      }
+
+      if (!keyword) {
+        return true;
+      }
+
+      const haystack = `${finding.title}\n${finding.evidence}\n${finding.recommendation}`.toLowerCase();
+      return haystack.includes(keyword);
+    });
   };
 
   const comparableRuns: ComparableRun[] = auditRuns
@@ -480,6 +513,82 @@ export default function Home() {
     <div className={styles.page}>
       <main className={styles.main}>
         <h1>Enterprise AI Governance Copilot</h1>
+
+        <section style={{ marginBottom: "1rem", width: "100%", maxWidth: "800px" }}>
+          <h2>Findings Filters</h2>
+          <div
+            style={{
+              backgroundColor: "#fff",
+              border: "1px solid #e0e0e0",
+              borderRadius: "8px",
+              padding: "0.75rem",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.75rem",
+              alignItems: "end",
+            }}
+          >
+            <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.82rem" }}>
+              Category
+              <select
+                value={findingFilterCategory}
+                onChange={(e) => setFindingFilterCategory(e.target.value as FindingFilterCategory)}
+                style={{ padding: "0.35rem", border: "1px solid #ccc", borderRadius: "4px", minWidth: "170px" }}
+              >
+                <option value="all">All</option>
+                <option value="security">Security</option>
+                <option value="privacy">Privacy</option>
+                <option value="responsible-ai">Responsible AI</option>
+              </select>
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.82rem" }}>
+              Severity
+              <select
+                value={findingFilterSeverity}
+                onChange={(e) => setFindingFilterSeverity(e.target.value as FindingFilterSeverity)}
+                style={{ padding: "0.35rem", border: "1px solid #ccc", borderRadius: "4px", minWidth: "150px" }}
+              >
+                <option value="all">All</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.82rem", flex: "1 1 260px" }}>
+              Keyword Search
+              <input
+                type="text"
+                value={findingSearchTerm}
+                onChange={(e) => setFindingSearchTerm(e.target.value)}
+                placeholder="Search title, evidence, recommendation"
+                style={{ padding: "0.35rem", border: "1px solid #ccc", borderRadius: "4px" }}
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={() => {
+                setFindingFilterCategory("all");
+                setFindingFilterSeverity("all");
+                setFindingSearchTerm("");
+              }}
+              style={{
+                padding: "0.4rem 0.75rem",
+                fontSize: "0.78rem",
+                backgroundColor: "#6c757d",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                height: "fit-content",
+              }}
+            >
+              Clear Filters
+            </button>
+          </div>
+        </section>
 
         <section style={{ width: "100%", maxWidth: "800px", marginBottom: "1rem" }}>
           <h2>Active Governance Policies</h2>
@@ -1112,13 +1221,19 @@ export default function Home() {
                       {expandedFindings.has(run.id) && (
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                           {(() => {
-                            const securityFindings = run.findings.items.filter(
+                            const filteredItems = filterFindings(run.findings.items, {
+                              category: findingFilterCategory,
+                              severity: findingFilterSeverity,
+                              keyword: findingSearchTerm,
+                            });
+
+                            const securityFindings = filteredItems.filter(
                               (finding) => finding.category === "security",
                             );
-                            const privacyFindings = run.findings.items.filter(
+                            const privacyFindings = filteredItems.filter(
                               (finding) => finding.category === "privacy",
                             );
-                            const responsibleAiFindings = run.findings.items.filter(
+                            const responsibleAiFindings = filteredItems.filter(
                               (finding) => finding.category === "responsible-ai",
                             );
 
@@ -1127,6 +1242,23 @@ export default function Home() {
                               { heading: "Privacy Findings", items: privacyFindings },
                               { heading: "Responsible AI Findings", items: responsibleAiFindings },
                             ];
+
+                            if (filteredItems.length === 0) {
+                              return (
+                                <div
+                                  style={{
+                                    fontSize: "0.82rem",
+                                    color: "#666",
+                                    backgroundColor: "#fff",
+                                    border: "1px solid #e0e0e0",
+                                    borderRadius: "4px",
+                                    padding: "0.65rem",
+                                  }}
+                                >
+                                  No findings match the current filters.
+                                </div>
+                              );
+                            }
 
                             return sections
                               .filter((section) => section.items.length > 0)
