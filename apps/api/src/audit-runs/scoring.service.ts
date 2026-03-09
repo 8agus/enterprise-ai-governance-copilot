@@ -1,11 +1,13 @@
 import { Injectable } from "@nestjs/common";
 
 type FindingSeverity = "low" | "medium" | "high";
+type FindingCategory = "security" | "privacy" | "responsible-ai";
 
 type Findings = {
   summary: { total: number; high: number; medium: number; low: number };
   items: Array<{
     id: string;
+    category: FindingCategory;
     severity: FindingSeverity;
     title: string;
     evidence: string;

@@ -2,9 +2,11 @@ import { Injectable } from "@nestjs/common";
 import type { SampledRepoFile } from "./github-ingestion.service";
 
 type FindingSeverity = "low" | "medium" | "high";
+type FindingCategory = "security" | "privacy" | "responsible-ai";
 
 type ResponsibleAiFinding = {
   id: string;
+  category: FindingCategory;
   severity: FindingSeverity;
   title: string;
   evidence: string;
@@ -188,7 +190,7 @@ export class ResponsibleAiScannerService {
   private addFinding(
     findings: ResponsibleAiFinding[],
     keys: Set<string>,
-    finding: Omit<ResponsibleAiFinding, "id">,
+    finding: Omit<ResponsibleAiFinding, "id" | "category">,
   ): void {
     const key = `${finding.severity}|${finding.title}|${finding.evidence}`;
     if (keys.has(key)) {
@@ -196,6 +198,6 @@ export class ResponsibleAiScannerService {
     }
 
     keys.add(key);
-    findings.push({ id: "", ...finding });
+    findings.push({ id: "", category: "responsible-ai", ...finding });
   }
 }

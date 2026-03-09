@@ -3,9 +3,11 @@ import { PolicyLoaderService } from "../policies/policy-loader.service";
 import type { SampledRepoFile } from "./github-ingestion.service";
 
 type FindingSeverity = "low" | "medium" | "high";
+type FindingCategory = "security" | "privacy" | "responsible-ai";
 
 type PrivacyFinding = {
   id: string;
+  category: FindingCategory;
   severity: FindingSeverity;
   title: string;
   evidence: string;
@@ -99,7 +101,7 @@ export class PrivacyScannerService {
   private addFinding(
     findings: PrivacyFinding[],
     keys: Set<string>,
-    finding: Omit<PrivacyFinding, "id">,
+    finding: Omit<PrivacyFinding, "id" | "category">,
   ): void {
     const key = `${finding.severity}|${finding.title}|${finding.evidence}`;
     if (keys.has(key)) {
@@ -107,6 +109,6 @@ export class PrivacyScannerService {
     }
 
     keys.add(key);
-    findings.push({ id: "", ...finding });
+    findings.push({ id: "", category: "privacy", ...finding });
   }
 }

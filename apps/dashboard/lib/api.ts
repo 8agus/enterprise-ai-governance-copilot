@@ -1,6 +1,7 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 export type FindingSeverity = "low" | "medium" | "high";
+export type FindingCategory = "security" | "privacy" | "responsible-ai";
 
 export interface Findings {
   summary: {
@@ -11,6 +12,7 @@ export interface Findings {
   };
   items: Array<{
     id: string;
+    category: FindingCategory;
     severity: FindingSeverity;
     title: string;
     evidence: string;

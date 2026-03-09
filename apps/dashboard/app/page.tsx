@@ -5,19 +5,6 @@ import styles from "./page.module.css";
 import type { AuditRun } from "../lib/api";
 import { ApiError, createAuditRun, getAuditRuns, runPendingAudit } from "../lib/api";
 
-const RESPONSIBLE_AI_TITLE_KEYWORDS = [
-  "responsible",
-  "governance",
-  "ai policy",
-  "model governance",
-  "evaluation",
-  "prompt injection",
-  "human review",
-  "content safety",
-];
-
-const PRIVACY_TITLE_KEYWORDS = ["privacy", "pii", "personal data", "gdpr", "data"]; 
-
 export default function Home() {
   // State for form input
   const [repoUrl, setRepoUrl] = useState("");
@@ -184,20 +171,6 @@ export default function Home() {
       }
       return newSet;
     });
-  };
-
-  const categorizeFinding = (title: string): "security" | "privacy" | "responsibleAi" => {
-    const lowerTitle = title.toLowerCase();
-
-    if (RESPONSIBLE_AI_TITLE_KEYWORDS.some((keyword) => lowerTitle.includes(keyword))) {
-      return "responsibleAi";
-    }
-
-    if (PRIVACY_TITLE_KEYWORDS.some((keyword) => lowerTitle.includes(keyword))) {
-      return "privacy";
-    }
-
-    return "security";
   };
 
   return (
@@ -381,13 +354,13 @@ export default function Home() {
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                           {(() => {
                             const securityFindings = run.findings.items.filter(
-                              (finding) => categorizeFinding(finding.title) === "security",
+                              (finding) => finding.category === "security",
                             );
                             const privacyFindings = run.findings.items.filter(
-                              (finding) => categorizeFinding(finding.title) === "privacy",
+                              (finding) => finding.category === "privacy",
                             );
                             const responsibleAiFindings = run.findings.items.filter(
-                              (finding) => categorizeFinding(finding.title) === "responsibleAi",
+                              (finding) => finding.category === "responsible-ai",
                             );
 
                             const sections = [
