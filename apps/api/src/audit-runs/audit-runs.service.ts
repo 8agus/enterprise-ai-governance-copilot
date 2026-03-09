@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { GithubIngestionService } from "./github-ingestion.service";
 import { SecurityScannerService } from "./security-scanner.service";
 import { PrivacyScannerService } from "./privacy-scanner.service";
+import { ScoringService } from "./scoring.service";
 
 type FindingSeverity = "low" | "medium" | "high";
 
@@ -24,6 +25,7 @@ export class AuditRunsService {
     private readonly githubIngestion: GithubIngestionService,
     private readonly securityScanner: SecurityScannerService,
     private readonly privacyScanner: PrivacyScannerService,
+    private readonly scoring: ScoringService,
   ) {}
 
   async create(repoUrl: string) {
@@ -59,6 +61,7 @@ export class AuditRunsService {
       const securityFindings = this.securityScanner.scanSampledFiles(sampledFiles);
       const privacyFindings = this.privacyScanner.scanSampledFiles(sampledFiles);
       const findings = this.mergeFindings(securityFindings, privacyFindings);
+      const auditSummary = this.scoring.calculate(findings);
 
       // Simulate audit work (2 seconds)
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -66,7 +69,7 @@ export class AuditRunsService {
       // Update status to "completed" and set findings
       return this.prisma.auditRun.update({
         where: { id },
-        data: { status: "completed", findings },
+        data: { status: "completed", findings: { ...findings, auditSummary } },
       });
     } catch (error) {
       await this.prisma.auditRun.update({

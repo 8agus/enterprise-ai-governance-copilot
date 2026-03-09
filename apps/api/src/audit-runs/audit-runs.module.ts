@@ -6,6 +6,7 @@ import { GithubIngestionService } from "./github-ingestion.service";
 import { SecurityScannerService } from "./security-scanner.service";
 import { PrivacyScannerService } from "./privacy-scanner.service";
 import { PolicyLoaderService } from "../policies/policy-loader.service";
+import { ScoringService } from "./scoring.service";
 
 @Module({
   imports: [PrismaModule],
@@ -16,6 +17,7 @@ import { PolicyLoaderService } from "../policies/policy-loader.service";
     SecurityScannerService,
     PrivacyScannerService,
     PolicyLoaderService,
+    ScoringService,
   ],
 })
 export class AuditRunsModule {}
