@@ -4,11 +4,18 @@ import { AuditRunsService } from "./audit-runs.service";
 import { PrismaModule } from "../prisma/prisma.module";
 import { GithubIngestionService } from "./github-ingestion.service";
 import { SecurityScannerService } from "./security-scanner.service";
+import { PrivacyScannerService } from "./privacy-scanner.service";
 import { PolicyLoaderService } from "../policies/policy-loader.service";
 
 @Module({
   imports: [PrismaModule],
   controllers: [AuditRunsController],
-  providers: [AuditRunsService, GithubIngestionService, SecurityScannerService, PolicyLoaderService],
+  providers: [
+    AuditRunsService,
+    GithubIngestionService,
+    SecurityScannerService,
+    PrivacyScannerService,
+    PolicyLoaderService,
+  ],
 })
 export class AuditRunsModule {}

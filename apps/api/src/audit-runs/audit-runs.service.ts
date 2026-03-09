@@ -2,6 +2,20 @@ import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { GithubIngestionService } from "./github-ingestion.service";
 import { SecurityScannerService } from "./security-scanner.service";
+import { PrivacyScannerService } from "./privacy-scanner.service";
+
+type FindingSeverity = "low" | "medium" | "high";
+
+type Findings = {
+  summary: { total: number; high: number; medium: number; low: number };
+  items: Array<{
+    id: string;
+    severity: FindingSeverity;
+    title: string;
+    evidence: string;
+    recommendation: string;
+  }>;
+};
 
 @Injectable()
 export class AuditRunsService {
@@ -9,6 +23,7 @@ export class AuditRunsService {
     private readonly prisma: PrismaService,
     private readonly githubIngestion: GithubIngestionService,
     private readonly securityScanner: SecurityScannerService,
+    private readonly privacyScanner: PrivacyScannerService,
   ) {}
 
   async create(repoUrl: string) {
@@ -41,7 +56,9 @@ export class AuditRunsService {
       const sampledFiles = await this.githubIngestion.samplePolicyRelevantFiles(auditRun.repoUrl);
 
       // Deterministic MVP security checks with policy-driven rules.
-      const findings = this.securityScanner.scanSampledFiles(sampledFiles);
+      const securityFindings = this.securityScanner.scanSampledFiles(sampledFiles);
+      const privacyFindings = this.privacyScanner.scanSampledFiles(sampledFiles);
+      const findings = this.mergeFindings(securityFindings, privacyFindings);
 
       // Simulate audit work (2 seconds)
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -59,5 +76,22 @@ export class AuditRunsService {
 
       throw new Error(error instanceof Error ? error.message : "Audit execution failed");
     }
+  }
+
+  private mergeFindings(first: Findings, second: Findings): Findings {
+    const mergedItems = [...first.items, ...second.items].map((item, index) => ({
+      ...item,
+      id: String(index + 1),
+    }));
+
+    return {
+      summary: {
+        total: mergedItems.length,
+        high: mergedItems.filter((item) => item.severity === "high").length,
+        medium: mergedItems.filter((item) => item.severity === "medium").length,
+        low: mergedItems.filter((item) => item.severity === "low").length,
+      },
+      items: mergedItems,
+    };
   }
 }
