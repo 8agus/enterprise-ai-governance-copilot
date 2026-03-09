@@ -4,6 +4,12 @@ export type FindingSeverity = "low" | "medium" | "high";
 export type FindingCategory = "security" | "privacy" | "responsible-ai";
 export type RiskLevel = "low" | "moderate" | "high";
 
+export type GovernancePolicies = {
+  security: Record<string, boolean>;
+  privacy: Record<string, boolean>;
+  responsible_ai: Record<string, boolean>;
+};
+
 export interface AuditSummary {
   score: number;
   riskLevel: RiskLevel;
@@ -97,4 +103,11 @@ export async function runPendingAudit(id: string): Promise<void> {
   });
 
   await assertOk(res, "Failed to run audit");
+}
+
+export async function getGovernancePolicies(): Promise<GovernancePolicies> {
+  const res = await fetch(`${API_URL}/policies/governance`);
+  await assertOk(res, "Failed to fetch governance policies");
+
+  return (await res.json()) as GovernancePolicies;
 }

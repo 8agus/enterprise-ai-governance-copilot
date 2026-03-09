@@ -6,11 +6,11 @@ import { GithubIngestionService } from "./github-ingestion.service";
 import { SecurityScannerService } from "./security-scanner.service";
 import { PrivacyScannerService } from "./privacy-scanner.service";
 import { ResponsibleAiScannerService } from "./responsible-ai-scanner.service";
-import { PolicyLoaderService } from "../policies/policy-loader.service";
+import { PoliciesModule } from "../policies/policies.module";
 import { ScoringService } from "./scoring.service";
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, PoliciesModule],
   controllers: [AuditRunsController],
   providers: [
     AuditRunsService,
@@ -18,7 +18,6 @@ import { ScoringService } from "./scoring.service";
     SecurityScannerService,
     PrivacyScannerService,
     ResponsibleAiScannerService,
-    PolicyLoaderService,
     ScoringService,
   ],
 })

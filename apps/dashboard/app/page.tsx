@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
-import type { AuditRun, FindingCategory, FindingSeverity, RiskLevel } from "../lib/api";
-import { ApiError, createAuditRun, getAuditRuns, runPendingAudit } from "../lib/api";
+import type { AuditRun, FindingCategory, FindingSeverity, GovernancePolicies, RiskLevel } from "../lib/api";
+import { ApiError, createAuditRun, getAuditRuns, getGovernancePolicies, runPendingAudit } from "../lib/api";
 
 const HEATMAP_CATEGORIES: FindingCategory[] = ["security", "privacy", "responsible-ai"];
 const HEATMAP_SEVERITIES: FindingSeverity[] = ["high", "medium", "low"];
@@ -63,7 +63,10 @@ export default function Home() {
   // State for loading and error handling
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingRuns, setIsFetchingRuns] = useState(false);
+  const [isFetchingPolicies, setIsFetchingPolicies] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [policiesError, setPoliciesError] = useState<string | null>(null);
+  const [governancePolicies, setGovernancePolicies] = useState<GovernancePolicies | null>(null);
   
   // Track which audit run is currently being executed
   const [runningAuditId, setRunningAuditId] = useState<string | null>(null);
@@ -78,6 +81,7 @@ export default function Home() {
   // Fetch audit runs on page load
   useEffect(() => {
     fetchAuditRuns();
+    fetchPolicies();
   }, []);
 
   // Function to fetch all audit runs from API
@@ -104,6 +108,30 @@ export default function Home() {
       }
     } finally {
       setIsFetchingRuns(false);
+    }
+  };
+
+  const fetchPolicies = async () => {
+    setIsFetchingPolicies(true);
+    try {
+      const policies = await getGovernancePolicies();
+      setGovernancePolicies(policies);
+      setPoliciesError(null);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const msg =
+          e.status === 0
+            ? "Unable to load governance policies. Please check API connectivity."
+            : e.status >= 500
+              ? "Policy service is temporarily unavailable."
+              : e.message || "Failed to load governance policies.";
+
+        setPoliciesError(msg);
+      } else {
+        setPoliciesError("Failed to load governance policies.");
+      }
+    } finally {
+      setIsFetchingPolicies(false);
     }
   };
 
@@ -441,10 +469,98 @@ export default function Home() {
     return `Risk worsened from ${previousTrendRun.riskLevel} to ${latestTrendRun.riskLevel}.`;
   };
 
+  const formatRuleName = (rule: string): string => {
+    return rule
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  };
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
         <h1>Enterprise AI Governance Copilot</h1>
+
+        <section style={{ width: "100%", maxWidth: "800px", marginBottom: "1rem" }}>
+          <h2>Active Governance Policies</h2>
+          {isFetchingPolicies ? (
+            <div
+              style={{
+                background: "#e6f0ff",
+                border: "1px solid #bfdbfe",
+                color: "#1d4ed8",
+                padding: "10px 12px",
+                borderRadius: 8,
+              }}
+            >
+              Loading active governance policies...
+            </div>
+          ) : policiesError ? (
+            <div
+              style={{
+                background: "#fff4e5",
+                border: "1px solid #ffddb0",
+                color: "#8a4b00",
+                padding: "10px 12px",
+                borderRadius: 8,
+              }}
+            >
+              {policiesError}
+            </div>
+          ) : governancePolicies ? (
+            <div
+              style={{
+                backgroundColor: "#fff",
+                border: "1px solid #e0e0e0",
+                borderRadius: "8px",
+                padding: "0.75rem",
+                display: "grid",
+                gap: "0.75rem",
+              }}
+            >
+              {([
+                { key: "security", label: "Security" },
+                { key: "privacy", label: "Privacy" },
+                { key: "responsible_ai", label: "Responsible AI" },
+              ] as const).map((group) => (
+                <div key={group.key} style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: "bold", color: "#333" }}>{group.label}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                    {Object.entries(governancePolicies[group.key]).map(([rule, enabled]) => (
+                      <div
+                        key={rule}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          border: "1px solid #ececec",
+                          borderRadius: "4px",
+                          padding: "0.35rem 0.5rem",
+                          fontSize: "0.8rem",
+                          backgroundColor: "#fafafa",
+                        }}
+                      >
+                        <span>{formatRuleName(rule)}</span>
+                        <span
+                          style={{
+                            color: "white",
+                            backgroundColor: enabled ? "#198754" : "#6c757d",
+                            padding: "0.1rem 0.45rem",
+                            borderRadius: "10px",
+                            fontSize: "0.72rem",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {enabled ? "Enabled" : "Disabled"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
 
         {/* Start Audit Form */}
         <section style={{ marginBottom: "2rem", width: "100%", maxWidth: "600px" }}>
