@@ -2,8 +2,27 @@
 
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
-import type { AuditRun } from "../lib/api";
+import type { AuditRun, FindingCategory, FindingSeverity } from "../lib/api";
 import { ApiError, createAuditRun, getAuditRuns, runPendingAudit } from "../lib/api";
+
+const HEATMAP_CATEGORIES: FindingCategory[] = ["security", "privacy", "responsible-ai"];
+const HEATMAP_SEVERITIES: FindingSeverity[] = ["high", "medium", "low"];
+
+type HeatmapMatrix = Record<FindingCategory, Record<FindingSeverity, number>>;
+
+const createEmptyHeatmap = (): HeatmapMatrix => ({
+  security: { high: 0, medium: 0, low: 0 },
+  privacy: { high: 0, medium: 0, low: 0 },
+  "responsible-ai": { high: 0, medium: 0, low: 0 },
+});
+
+const getCategoryLabel = (category: FindingCategory): string => {
+  if (category === "responsible-ai") {
+    return "Responsible AI";
+  }
+
+  return category.charAt(0).toUpperCase() + category.slice(1);
+};
 
 export default function Home() {
   // State for form input
@@ -173,6 +192,17 @@ export default function Home() {
     });
   };
 
+  const buildHeatmap = (run: AuditRun): HeatmapMatrix | null => {
+    if (run.status !== "completed" || !run.findings || run.findings.items.length === 0) {
+      return null;
+    }
+
+    return run.findings.items.reduce<HeatmapMatrix>((matrix, finding) => {
+      matrix[finding.category][finding.severity] += 1;
+      return matrix;
+    }, createEmptyHeatmap());
+  };
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
@@ -279,6 +309,81 @@ export default function Home() {
                     backgroundColor: "#f9f9f9",
                   }}
                 >
+                  {(() => {
+                    const heatmap = buildHeatmap(run);
+                    return heatmap ? (
+                      <div
+                        style={{
+                          marginBottom: "0.75rem",
+                          backgroundColor: "#fff",
+                          border: "1px solid #e0e0e0",
+                          borderRadius: "6px",
+                          padding: "0.5rem",
+                        }}
+                      >
+                        <div style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#333", marginBottom: "0.35rem" }}>
+                          Governance Risk Heatmap
+                        </div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
+                          <thead>
+                            <tr>
+                              <th style={{ textAlign: "left", padding: "0.3rem", borderBottom: "1px solid #e6e6e6" }}>
+                                Category
+                              </th>
+                              <th style={{ textAlign: "center", padding: "0.3rem", borderBottom: "1px solid #e6e6e6" }}>
+                                High
+                              </th>
+                              <th style={{ textAlign: "center", padding: "0.3rem", borderBottom: "1px solid #e6e6e6" }}>
+                                Medium
+                              </th>
+                              <th style={{ textAlign: "center", padding: "0.3rem", borderBottom: "1px solid #e6e6e6" }}>
+                                Low
+                              </th>
+                              <th style={{ textAlign: "center", padding: "0.3rem", borderBottom: "1px solid #e6e6e6" }}>
+                                Total
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {HEATMAP_CATEGORIES.map((category) => {
+                              const rowTotal = HEATMAP_SEVERITIES.reduce(
+                                (sum, severity) => sum + heatmap[category][severity],
+                                0,
+                              );
+
+                              return (
+                                <tr key={category}>
+                                  <td style={{ padding: "0.3rem", borderBottom: "1px solid #f0f0f0" }}>
+                                    {getCategoryLabel(category)}
+                                  </td>
+                                  <td style={{ textAlign: "center", padding: "0.3rem", borderBottom: "1px solid #f0f0f0" }}>
+                                    {heatmap[category].high}
+                                  </td>
+                                  <td style={{ textAlign: "center", padding: "0.3rem", borderBottom: "1px solid #f0f0f0" }}>
+                                    {heatmap[category].medium}
+                                  </td>
+                                  <td style={{ textAlign: "center", padding: "0.3rem", borderBottom: "1px solid #f0f0f0" }}>
+                                    {heatmap[category].low}
+                                  </td>
+                                  <td
+                                    style={{
+                                      textAlign: "center",
+                                      padding: "0.3rem",
+                                      borderBottom: "1px solid #f0f0f0",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {rowTotal}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null;
+                  })()}
+
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
                     <strong>{run.repoUrl}</strong>
                     <span
