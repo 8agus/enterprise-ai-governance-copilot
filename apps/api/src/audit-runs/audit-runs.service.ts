@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { GithubIngestionService } from "./github-ingestion.service";
 
 type FindingSeverity = "low" | "medium" | "high";
 
@@ -16,7 +17,10 @@ type Findings = {
 
 @Injectable()
 export class AuditRunsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly githubIngestion: GithubIngestionService,
+  ) {}
 
   async create(repoUrl: string) {
     return this.prisma.auditRun.create({
@@ -32,23 +36,40 @@ export class AuditRunsService {
   }
 
   async run(id: string) {
+    const auditRun = await this.prisma.auditRun.findUnique({ where: { id } });
+    if (!auditRun) {
+      throw new Error(`Audit run not found for id '${id}'`);
+    }
+
     // Update status to "running"
     await this.prisma.auditRun.update({
       where: { id },
       data: { status: "running" },
     });
 
-    // Simulate audit work (2 seconds)
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      // Minimal repository ingestion for future policy-driven checks.
+      await this.githubIngestion.samplePolicyRelevantFiles(auditRun.repoUrl);
 
-    // Generate mock findings
-    const findings = this.generateMockFindings();
+      // Simulate audit work (2 seconds)
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // Update status to "completed" and set findings
-    return this.prisma.auditRun.update({
-      where: { id },
-      data: { status: "completed", findings },
-    });
+      // Generate mock findings
+      const findings = this.generateMockFindings();
+
+      // Update status to "completed" and set findings
+      return this.prisma.auditRun.update({
+        where: { id },
+        data: { status: "completed", findings },
+      });
+    } catch (error) {
+      await this.prisma.auditRun.update({
+        where: { id },
+        data: { status: "pending" },
+      });
+
+      throw new Error(error instanceof Error ? error.message : "Audit execution failed");
+    }
   }
 
   private generateMockFindings(): Findings {
