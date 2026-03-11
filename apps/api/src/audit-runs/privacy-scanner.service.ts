@@ -40,6 +40,7 @@ export class PrivacyScannerService {
       const lowerPath = file.path.toLowerCase();
       const contentText = typeof file.content === "string" ? file.content : "";
       const patternTarget = contentText.length > 0 ? contentText : file.path;
+      const patternMatchSource = contentText.length > 0 ? "sampled file content" : "sampled file path";
 
       for (const rawPattern of policy.privacy.piiPatterns) {
         const expression = this.toRegExp(rawPattern);
@@ -47,7 +48,7 @@ export class PrivacyScannerService {
           this.addFinding(findings, findingKeys, {
             severity: "medium",
             title: "Potential PII-related file indicator detected",
-            evidence: `File path '${file.path}' matched privacy PII pattern '${rawPattern}'`,
+            evidence: `Policy pattern matched ${patternMatchSource} for file '${file.path}' (privacy PII pattern '${rawPattern}')`,
             recommendation:
               "Review this file for personal data handling and ensure privacy-safe storage/access controls.",
           });
@@ -60,7 +61,7 @@ export class PrivacyScannerService {
           this.addFinding(findings, findingKeys, {
             severity: "medium",
             title: "Potential risky logging indicator detected",
-            evidence: `File path '${file.path}' matched privacy logging pattern '${rawPattern}'`,
+            evidence: `Policy pattern matched ${patternMatchSource} for file '${file.path}' (privacy logging pattern '${rawPattern}')`,
             recommendation: "Review logging to avoid recording personal or sensitive user data.",
           });
         }

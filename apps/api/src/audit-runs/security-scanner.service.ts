@@ -34,6 +34,7 @@ export class SecurityScannerService {
       const fileName = filePathLower.split("/").pop() ?? filePathLower;
       const contentText = typeof file.content === "string" ? file.content : "";
       const patternTarget = contentText.length > 0 ? contentText : file.path;
+      const patternMatchSource = contentText.length > 0 ? "sampled file content" : "sampled file path";
 
       if (governancePolicies.security.dependency_vulnerabilities) {
         for (const suspicious of policy.security.suspiciousFiles) {
@@ -60,8 +61,8 @@ export class SecurityScannerService {
           if (expression.test(patternTarget)) {
             this.addFinding(findings, findingKeys, {
               severity: "medium",
-              title: "Potential secret pattern detected in file path",
-              evidence: `File path '${file.path}' matched secret pattern '${rawPattern}'`,
+              title: "Potential secret pattern detected",
+              evidence: `Policy pattern matched ${patternMatchSource} for file '${file.path}' (security pattern '${rawPattern}')`,
               recommendation: "Review this file for secrets and move sensitive values to secure secret storage.",
             });
           }
