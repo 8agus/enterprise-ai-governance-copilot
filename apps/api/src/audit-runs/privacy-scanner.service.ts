@@ -38,10 +38,12 @@ export class PrivacyScannerService {
 
     for (const file of sampledFiles) {
       const lowerPath = file.path.toLowerCase();
+      const contentText = typeof file.content === "string" ? file.content : "";
+      const patternTarget = contentText.length > 0 ? contentText : file.path;
 
       for (const rawPattern of policy.privacy.piiPatterns) {
         const expression = this.toRegExp(rawPattern);
-        if (expression.test(file.path)) {
+        if (expression.test(patternTarget)) {
           this.addFinding(findings, findingKeys, {
             severity: "medium",
             title: "Potential PII-related file indicator detected",
@@ -54,7 +56,7 @@ export class PrivacyScannerService {
 
       for (const rawPattern of policy.privacy.loggingPatterns) {
         const expression = this.toRegExp(rawPattern);
-        if (expression.test(file.path)) {
+        if (expression.test(patternTarget)) {
           this.addFinding(findings, findingKeys, {
             severity: "medium",
             title: "Potential risky logging indicator detected",
