@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { HttpException, Injectable, InternalServerErrorException, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { GithubIngestionService } from "./github-ingestion.service";
 import { SecurityScannerService } from "./security-scanner.service";
@@ -23,6 +23,8 @@ type Findings = {
 
 @Injectable()
 export class AuditRunsService {
+  private readonly logger = new Logger(AuditRunsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly githubIngestion: GithubIngestionService,
@@ -46,43 +48,75 @@ export class AuditRunsService {
   }
 
   async run(id: string) {
+    let stage = "run started";
+    this.logger.log(`[${id}] run started`);
+
+    stage = "audit run record loaded";
     const auditRun = await this.prisma.auditRun.findUnique({ where: { id } });
     if (!auditRun) {
-      throw new Error(`Audit run not found for id '${id}'`);
+      throw new NotFoundException(`Audit run not found for id '${id}'`);
     }
+    this.logger.log(`[${id}] audit run record loaded`);
 
     // Update status to "running"
+    stage = "run marked running";
     await this.prisma.auditRun.update({
       where: { id },
       data: { status: "running" },
     });
+    this.logger.log(`[${id}] run marked running`);
 
     try {
       // Minimal repository ingestion for future policy-driven checks.
+      stage = "files sampled";
       const sampledFiles = await this.githubIngestion.samplePolicyRelevantFiles(auditRun.repoUrl);
+      this.logger.log(`[${id}] files sampled (${sampledFiles.length})`);
 
       // Deterministic MVP security checks with policy-driven rules.
+      stage = "scanners completed";
       const securityFindings = this.securityScanner.scanSampledFiles(sampledFiles);
       const privacyFindings = this.privacyScanner.scanSampledFiles(sampledFiles);
       const responsibleAiFindings = this.responsibleAiScanner.scanSampledFiles(sampledFiles);
       const findings = this.mergeFindings(securityFindings, privacyFindings, responsibleAiFindings);
+      this.logger.log(
+        `[${id}] scanners completed (security=${securityFindings.items.length}, privacy=${privacyFindings.items.length}, responsible-ai=${responsibleAiFindings.items.length})`,
+      );
+
+      stage = "score calculated";
       const auditSummary = this.scoring.calculate(findings);
+      this.logger.log(
+        `[${id}] score calculated (score=${auditSummary.score}, riskLevel=${auditSummary.riskLevel}, totalFindings=${auditSummary.totalFindings})`,
+      );
 
       // Simulate audit work (2 seconds)
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Update status to "completed" and set findings
-      return this.prisma.auditRun.update({
+      stage = "findings persisted";
+      const updatedRun = await this.prisma.auditRun.update({
         where: { id },
         data: { status: "completed", findings: { ...findings, auditSummary } },
       });
+
+      this.logger.log(`[${id}] findings persisted`);
+      this.logger.log(`[${id}] run marked completed`);
+      return updatedRun;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      this.logger.error(`[${id}] failed at stage '${stage}': ${errorMessage}`);
+
       await this.prisma.auditRun.update({
         where: { id },
         data: { status: "pending" },
       });
 
-      throw new Error(error instanceof Error ? error.message : "Audit execution failed");
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        error instanceof Error ? error.message : "Audit execution failed",
+      );
     }
   }
 

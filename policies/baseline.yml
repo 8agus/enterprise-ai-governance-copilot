@@ -14,7 +14,7 @@ privacy:
     - "(?i)phone"
     - "(?i)ssn"
   loggingPatterns:
-    - "(?i)console\\.log\\(.*password"
+    - "(?i)console\\.log\\(.*password\\)"
     - "(?i)log\\(.*token"
 
 responsible_ai:

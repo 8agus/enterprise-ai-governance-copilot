@@ -88,12 +88,14 @@ export class SecurityScannerService {
   }
 
   private toRegExp(rawPattern: string): RegExp {
+    const normalizedPattern = rawPattern.replace(/\\\\/g, "\\");
+
     try {
-      if (rawPattern.startsWith("(?i)")) {
-        return new RegExp(rawPattern.slice(4), "i");
+      if (normalizedPattern.startsWith("(?i)")) {
+        return new RegExp(normalizedPattern.slice(4), "i");
       }
 
-      return new RegExp(rawPattern);
+      return new RegExp(normalizedPattern);
     } catch {
       throw new Error(`Invalid security pattern in baseline policy: '${rawPattern}'`);
     }

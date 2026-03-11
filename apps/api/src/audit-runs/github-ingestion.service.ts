@@ -1,4 +1,11 @@
-import { Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 
 type GitHubTreeItem = {
   path: string;
@@ -23,6 +30,10 @@ type GitHubContentResponse = {
   encoding?: string;
 };
 
+type GitHubErrorResponse = {
+  message?: string;
+};
+
 export type SampledRepoFile = {
   path: string;
   type: string;
@@ -38,10 +49,17 @@ const MAX_CONTENT_BYTES = 30_000;
 
 @Injectable()
 export class GithubIngestionService {
+  private readonly logger = new Logger(GithubIngestionService.name);
+
   async samplePolicyRelevantFiles(repoUrl: string): Promise<SampledRepoFile[]> {
     const { owner, repo } = this.parseOwnerRepo(repoUrl);
+    this.logger.log(`[${owner}/${repo}] repo URL parsed`);
+
     const branch = await this.fetchDefaultBranch(owner, repo);
+    this.logger.log(`[${owner}/${repo}] default branch fetched (${branch})`);
+
     const tree = await this.fetchRepositoryTree(owner, repo, branch);
+    this.logger.log(`[${owner}/${repo}] repository tree fetched (${tree.length} entries)`);
 
     const ranked = tree
       .filter((item) => item.type === "blob")
@@ -49,6 +67,8 @@ export class GithubIngestionService {
       .filter((item): item is RankedFile => item !== null)
       .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path))
       .slice(0, MAX_SAMPLED_FILES);
+
+    this.logger.log(`[${owner}/${repo}] policy-relevant files ranked (${ranked.length})`);
 
     const sampled = await Promise.all(
       ranked.map(async (rankedFile) => ({
@@ -60,6 +80,8 @@ export class GithubIngestionService {
       })),
     );
 
+    this.logger.log(`[${owner}/${repo}] files sampled (${sampled.length})`);
+
     return sampled;
   }
 
@@ -69,22 +91,22 @@ export class GithubIngestionService {
     try {
       url = new URL(repoUrl);
     } catch {
-      throw new Error("Invalid GitHub URL. Expected format: https://github.com/<owner>/<repo>");
+      throw new BadRequestException("Invalid GitHub URL. Expected format: https://github.com/<owner>/<repo>");
     }
 
     if (url.hostname !== "github.com") {
-      throw new Error("Invalid GitHub URL. Only github.com repository URLs are supported");
+      throw new BadRequestException("Invalid GitHub URL. Only github.com repository URLs are supported");
     }
 
     const parts = url.pathname.split("/").filter(Boolean);
     if (parts.length < 2) {
-      throw new Error("Invalid GitHub URL. Expected format: https://github.com/<owner>/<repo>");
+      throw new BadRequestException("Invalid GitHub URL. Expected format: https://github.com/<owner>/<repo>");
     }
 
     const owner = parts[0];
     const repo = parts[1].replace(/\.git$/i, "");
     if (!owner || !repo) {
-      throw new Error("Invalid GitHub URL. Owner or repository name is missing");
+      throw new BadRequestException("Invalid GitHub URL. Owner or repository name is missing");
     }
 
     return { owner, repo };
@@ -93,16 +115,19 @@ export class GithubIngestionService {
   private async fetchDefaultBranch(owner: string, repo: string): Promise<string> {
     const url = `https://api.github.com/repos/${owner}/${repo}`;
     const response = await fetch(url, {
-      headers: { "User-Agent": "enterprise-ai-governance-copilot" },
+      headers: this.githubHeaders(),
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch repository metadata from GitHub (${response.status})`);
+      throw await this.toGitHubHttpException(
+        response,
+        "Failed to fetch repository metadata from GitHub",
+      );
     }
 
     const data = (await response.json()) as GitHubRepoResponse;
     if (!data.default_branch) {
-      throw new Error("GitHub repository metadata did not include a default branch");
+      throw new ServiceUnavailableException("GitHub repository metadata did not include a default branch");
     }
 
     return data.default_branch;
@@ -111,16 +136,16 @@ export class GithubIngestionService {
   private async fetchRepositoryTree(owner: string, repo: string, branch: string): Promise<GitHubTreeItem[]> {
     const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
     const response = await fetch(url, {
-      headers: { "User-Agent": "enterprise-ai-governance-copilot" },
+      headers: this.githubHeaders(),
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch repository files from GitHub (${response.status})`);
+      throw await this.toGitHubHttpException(response, "Failed to fetch repository files from GitHub");
     }
 
     const data = (await response.json()) as GitHubTreeResponse;
     if (!Array.isArray(data.tree)) {
-      throw new Error("GitHub repository tree response is invalid");
+      throw new ServiceUnavailableException("GitHub repository tree response is invalid");
     }
 
     return data.tree;
@@ -144,7 +169,7 @@ export class GithubIngestionService {
 
     const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`;
     const response = await fetch(url, {
-      headers: { "User-Agent": "enterprise-ai-governance-copilot" },
+      headers: this.githubHeaders(),
     });
 
     if (!response.ok) {
@@ -225,5 +250,59 @@ export class GithubIngestionService {
       content: null,
       score: match.score,
     };
+  }
+
+  private githubHeaders(): Record<string, string> {
+    const token = process.env.GITHUB_TOKEN?.trim();
+
+    return token
+      ? {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "User-Agent": "enterprise-ai-governance-copilot",
+        }
+      : {
+          Accept: "application/vnd.github+json",
+          "User-Agent": "enterprise-ai-governance-copilot",
+        };
+  }
+
+  private async toGitHubHttpException(response: Response, context: string): Promise<HttpException> {
+    const githubMessage = await this.extractGitHubErrorMessage(response);
+    const detail = githubMessage ? `: ${githubMessage}` : "";
+
+    if (response.status === 404) {
+      return new BadRequestException(
+        `GitHub repository not found or not accessible${detail}. Verify repository URL and visibility.`,
+      );
+    }
+
+    if (response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0") {
+      return new HttpException(
+        "GitHub API rate limit reached. Set GITHUB_TOKEN in the API environment and retry.",
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    if (response.status === 403) {
+      return new BadRequestException(
+        `GitHub access denied${detail}. Check repository visibility and token permissions if using GITHUB_TOKEN.`,
+      );
+    }
+
+    if (response.status >= 500) {
+      return new ServiceUnavailableException(`GitHub API is temporarily unavailable${detail}.`);
+    }
+
+    return new BadRequestException(`${context} (${response.status})${detail}`);
+  }
+
+  private async extractGitHubErrorMessage(response: Response): Promise<string | null> {
+    try {
+      const body = (await response.json()) as GitHubErrorResponse;
+      return typeof body.message === "string" ? body.message : null;
+    } catch {
+      return null;
+    }
   }
 }

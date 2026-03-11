@@ -33,6 +33,8 @@ export interface Findings {
     title: string;
     evidence: string;
     recommendation: string;
+    fileReference?: string;
+    filePath?: string;
   }>;
   auditSummary?: AuditSummary;
 }
@@ -68,7 +70,15 @@ async function assertOk(res: Response, message: string): Promise<void> {
   try {
     const text = await res.text();
     if (text) {
-      errorMessage = text;
+      const parsed = JSON.parse(text) as { message?: string | string[] };
+
+      if (Array.isArray(parsed.message)) {
+        errorMessage = parsed.message.join("; ");
+      } else if (typeof parsed.message === "string" && parsed.message.trim().length > 0) {
+        errorMessage = parsed.message;
+      } else {
+        errorMessage = text;
+      }
     }
   } catch {
     // ignore

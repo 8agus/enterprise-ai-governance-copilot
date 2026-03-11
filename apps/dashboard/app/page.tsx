@@ -50,6 +50,26 @@ const getCategoryLabel = (category: FindingCategory): string => {
   return category.charAt(0).toUpperCase() + category.slice(1);
 };
 
+const normalizeFindingCategory = (rawCategory: unknown): FindingCategory | null => {
+  if (rawCategory === "responsible_ai") {
+    return "responsible-ai";
+  }
+
+  if (rawCategory === "security" || rawCategory === "privacy" || rawCategory === "responsible-ai") {
+    return rawCategory;
+  }
+
+  return null;
+};
+
+const normalizeFindingSeverity = (rawSeverity: unknown): FindingSeverity | null => {
+  if (rawSeverity === "high" || rawSeverity === "medium" || rawSeverity === "low") {
+    return rawSeverity;
+  }
+
+  return null;
+};
+
 const toRiskRank = (riskLevel: RiskLevel): number => {
   if (riskLevel === "high") {
     return 3;
@@ -87,6 +107,8 @@ export default function Home() {
   const [findingFilterCategory, setFindingFilterCategory] = useState<FindingFilterCategory>("all");
   const [findingFilterSeverity, setFindingFilterSeverity] = useState<FindingFilterSeverity>("all");
   const [findingSearchTerm, setFindingSearchTerm] = useState<string>("");
+  const [selectedFinding, setSelectedFinding] = useState<ReportFinding | null>(null);
+  const [isFindingDrawerOpen, setIsFindingDrawerOpen] = useState(false);
 
   const dismissError = () => setError(null);
 
@@ -95,6 +117,21 @@ export default function Home() {
     fetchAuditRuns();
     fetchPolicies();
   }, []);
+
+  useEffect(() => {
+    if (!isFindingDrawerOpen) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFindingDrawerOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isFindingDrawerOpen]);
 
   // Function to fetch all audit runs from API
   const fetchAuditRuns = async () => {
@@ -263,6 +300,20 @@ export default function Home() {
     }
   };
 
+  const openFindingDrawer = (finding: ReportFinding) => {
+    setSelectedFinding(finding);
+    setIsFindingDrawerOpen(true);
+  };
+
+  const closeFindingDrawer = () => {
+    setIsFindingDrawerOpen(false);
+  };
+
+  const getFindingFileReference = (finding: ReportFinding): string => {
+    const fileReference = finding.fileReference?.trim() || finding.filePath?.trim();
+    return fileReference && fileReference.length > 0 ? fileReference : "Not available";
+  };
+
   // Toggle findings visibility for a specific audit run
   const toggleFindings = (id: string) => {
     setExpandedFindings((prev) => {
@@ -282,7 +333,14 @@ export default function Home() {
     }
 
     return run.findings.items.reduce<HeatmapMatrix>((matrix, finding) => {
-      matrix[finding.category][finding.severity] += 1;
+      const category = normalizeFindingCategory(finding.category);
+      const severity = normalizeFindingSeverity(finding.severity);
+
+      if (!category || !severity) {
+        return matrix;
+      }
+
+      matrix[category][severity] += 1;
       return matrix;
     }, createEmptyHeatmap());
   };
@@ -346,7 +404,13 @@ export default function Home() {
   const getCategoryCounts = (run: ComparableRun): Record<FindingCategory, number> => {
     return run.findings.items.reduce<Record<FindingCategory, number>>(
       (counts, finding) => {
-        counts[finding.category] += 1;
+        const category = normalizeFindingCategory(finding.category);
+
+        if (!category) {
+          return counts;
+        }
+
+        counts[category] += 1;
         return counts;
       },
       { security: 0, privacy: 0, "responsible-ai": 0 },
@@ -380,14 +444,27 @@ export default function Home() {
 
     const groupedFindings = findings.items.reduce<Record<FindingCategory, ReportFinding[]>>(
       (groups, finding) => {
-        groups[finding.category].push(finding);
+        const category = normalizeFindingCategory(finding.category);
+
+        if (!category) {
+          return groups;
+        }
+
+        groups[category].push(finding);
         return groups;
       },
       { security: [], privacy: [], "responsible-ai": [] },
     );
 
     const heatmap = findings.items.reduce<HeatmapMatrix>((matrix, finding) => {
-      matrix[finding.category][finding.severity] += 1;
+      const category = normalizeFindingCategory(finding.category);
+      const severity = normalizeFindingSeverity(finding.severity);
+
+      if (!category || !severity) {
+        return matrix;
+      }
+
+      matrix[category][severity] += 1;
       return matrix;
     }, createEmptyHeatmap());
 
@@ -1268,11 +1345,22 @@ export default function Home() {
                                   {section.items.map((finding) => (
                                     <div
                                       key={finding.id}
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={() => openFindingDrawer(finding)}
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter" || event.key === " ") {
+                                          event.preventDefault();
+                                          openFindingDrawer(finding);
+                                        }
+                                      }}
+                                      aria-label={`Open finding details: ${finding.title}`}
                                       style={{
                                         padding: "0.75rem",
                                         backgroundColor: "#fff",
                                         borderRadius: "4px",
                                         border: "1px solid #e0e0e0",
+                                        cursor: "pointer",
                                       }}
                                     >
                                       <div
@@ -1319,6 +1407,102 @@ export default function Home() {
           )}
         </section>
       </main>
+
+      {isFindingDrawerOpen && selectedFinding ? (
+        <>
+          <button
+            type="button"
+            onClick={closeFindingDrawer}
+            aria-label="Close finding details"
+            style={{
+              position: "fixed",
+              inset: 0,
+              border: "none",
+              backgroundColor: "rgba(0, 0, 0, 0.35)",
+              zIndex: 1200,
+              cursor: "pointer",
+            }}
+          />
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Finding details"
+            style={{
+              position: "fixed",
+              top: 0,
+              right: 0,
+              width: "min(440px, 100%)",
+              height: "100vh",
+              backgroundColor: "#fff",
+              borderLeft: "1px solid #e0e0e0",
+              boxShadow: "-8px 0 24px rgba(0, 0, 0, 0.12)",
+              zIndex: 1201,
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "0.9rem 1rem",
+                borderBottom: "1px solid #ececec",
+              }}
+            >
+              <strong style={{ fontSize: "0.95rem" }}>Finding Details</strong>
+              <button
+                type="button"
+                onClick={closeFindingDrawer}
+                style={{
+                  padding: "0.35rem 0.6rem",
+                  fontSize: "0.78rem",
+                  border: "1px solid #d0d0d0",
+                  borderRadius: "4px",
+                  backgroundColor: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div style={{ padding: "1rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              <div style={{ fontSize: "0.84rem", color: "#444" }}>
+                <strong>Title:</strong> {selectedFinding.title}
+              </div>
+              <div style={{ fontSize: "0.84rem", color: "#444" }}>
+                <strong>Severity:</strong>{" "}
+                <span
+                  style={{
+                    padding: "0.1rem 0.45rem",
+                    borderRadius: "10px",
+                    backgroundColor: getSeverityColor(selectedFinding.severity),
+                    color: "white",
+                    fontSize: "0.73rem",
+                    textTransform: "uppercase",
+                    fontWeight: 700,
+                  }}
+                >
+                  {selectedFinding.severity}
+                </span>
+              </div>
+              <div style={{ fontSize: "0.84rem", color: "#444" }}>
+                <strong>Category:</strong> {getCategoryLabel(selectedFinding.category)}
+              </div>
+              <div style={{ fontSize: "0.84rem", color: "#444", lineHeight: 1.45 }}>
+                <strong>Evidence:</strong> {selectedFinding.evidence}
+              </div>
+              <div style={{ fontSize: "0.84rem", color: "#444", lineHeight: 1.45 }}>
+                <strong>Recommendation:</strong> {selectedFinding.recommendation}
+              </div>
+              <div style={{ fontSize: "0.84rem", color: "#444", lineHeight: 1.45 }}>
+                <strong>File Reference:</strong> {getFindingFileReference(selectedFinding)}
+              </div>
+            </div>
+          </aside>
+        </>
+      ) : null}
     </div>
   );
 }
