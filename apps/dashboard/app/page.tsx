@@ -1303,8 +1303,8 @@ export default function Home() {
                               padding: "0.65rem",
                             }}
                           >
-                            <div style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#333", marginBottom: "0.35rem" }}>
-                              AI Governance Insights
+                            <div style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#2b6cb0", marginBottom: "0.35rem" }}>
+                              🤖 AI Governance Insights (Microsoft Foundry)
                             </div>
 
                             <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", fontSize: "0.8rem", color: "#444" }}>
