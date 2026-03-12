@@ -1264,6 +1264,82 @@ export default function Home() {
                   {/* Display Findings */}
                   {run.findings && (
                     <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #ddd" }}>
+                      {(() => {
+                        const aiRecommendations = run.findings.aiRecommendations;
+
+                        const executiveSummary =
+                          typeof aiRecommendations?.executiveSummary === "string"
+                            ? aiRecommendations.executiveSummary.trim()
+                            : "";
+
+                        const topRisks = Array.isArray(aiRecommendations?.topRisks)
+                          ? aiRecommendations.topRisks
+                              .filter((risk): risk is string => typeof risk === "string")
+                              .map((risk) => risk.trim())
+                              .filter((risk) => risk.length > 0)
+                          : [];
+
+                        const recommendedActions = Array.isArray(aiRecommendations?.recommendedActions)
+                          ? aiRecommendations.recommendedActions
+                              .filter((action): action is string => typeof action === "string")
+                              .map((action) => action.trim())
+                              .filter((action) => action.length > 0)
+                          : [];
+
+                        const hasAiInsights =
+                          executiveSummary.length > 0 || topRisks.length > 0 || recommendedActions.length > 0;
+
+                        if (!hasAiInsights) {
+                          return null;
+                        }
+
+                        return (
+                          <div
+                            style={{
+                              marginBottom: "0.75rem",
+                              backgroundColor: "#fff",
+                              border: "1px solid #e0e0e0",
+                              borderRadius: "6px",
+                              padding: "0.65rem",
+                            }}
+                          >
+                            <div style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#333", marginBottom: "0.35rem" }}>
+                              AI Governance Insights
+                            </div>
+
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", fontSize: "0.8rem", color: "#444" }}>
+                              {executiveSummary.length > 0 ? (
+                                <div>
+                                  <strong>Executive Summary:</strong> {executiveSummary}
+                                </div>
+                              ) : null}
+
+                              {topRisks.length > 0 ? (
+                                <div>
+                                  <strong>Top Risks:</strong>
+                                  <ul style={{ margin: "0.25rem 0 0 1rem", padding: 0 }}>
+                                    {topRisks.map((risk, index) => (
+                                      <li key={`risk-${index}`}>{risk}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : null}
+
+                              {recommendedActions.length > 0 ? (
+                                <div>
+                                  <strong>Recommended Actions:</strong>
+                                  <ul style={{ margin: "0.25rem 0 0 1rem", padding: 0 }}>
+                                    {recommendedActions.map((action, index) => (
+                                      <li key={`action-${index}`}>{action}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                         {expandedFindings.has(run.id) ? (
                           <div style={{ fontSize: "0.875rem", fontWeight: "bold" }}>Findings</div>

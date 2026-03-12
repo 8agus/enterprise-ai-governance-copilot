@@ -37,6 +37,11 @@ export interface Findings {
     filePath?: string;
   }>;
   auditSummary?: AuditSummary;
+  aiRecommendations?: {
+    executiveSummary?: string | null;
+    topRisks?: string[] | null;
+    recommendedActions?: string[] | null;
+  } | null;
 }
 
 export type AuditRunStatus = "pending" | "running" | "completed";
