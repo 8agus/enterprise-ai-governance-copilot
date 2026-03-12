@@ -8,6 +8,7 @@ import { PrivacyScannerService } from "./privacy-scanner.service";
 import { ResponsibleAiScannerService } from "./responsible-ai-scanner.service";
 import { PoliciesModule } from "../policies/policies.module";
 import { ScoringService } from "./scoring.service";
+import { FoundryRecommendationsService } from "./foundry-recommendations.service";
 
 @Module({
   imports: [PrismaModule, PoliciesModule],
@@ -19,6 +20,7 @@ import { ScoringService } from "./scoring.service";
     PrivacyScannerService,
     ResponsibleAiScannerService,
     ScoringService,
+    FoundryRecommendationsService,
   ],
 })
 export class AuditRunsModule {}

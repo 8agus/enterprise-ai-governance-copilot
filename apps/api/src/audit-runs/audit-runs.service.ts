@@ -5,6 +5,7 @@ import { SecurityScannerService } from "./security-scanner.service";
 import { PrivacyScannerService } from "./privacy-scanner.service";
 import { ResponsibleAiScannerService } from "./responsible-ai-scanner.service";
 import { ScoringService } from "./scoring.service";
+import { FoundryRecommendationsService } from "./foundry-recommendations.service";
 
 type FindingSeverity = "low" | "medium" | "high";
 type FindingCategory = "security" | "privacy" | "responsible-ai";
@@ -17,6 +18,7 @@ type Findings = {
     severity: FindingSeverity;
     title: string;
     evidence: string;
+    snippet?: string | null;
     recommendation: string;
   }>;
 };
@@ -32,6 +34,7 @@ export class AuditRunsService {
     private readonly privacyScanner: PrivacyScannerService,
     private readonly responsibleAiScanner: ResponsibleAiScannerService,
     private readonly scoring: ScoringService,
+    private readonly foundryRecommendations: FoundryRecommendationsService,
   ) {}
 
   async create(repoUrl: string) {
@@ -88,6 +91,16 @@ export class AuditRunsService {
         `[${id}] score calculated (score=${auditSummary.score}, riskLevel=${auditSummary.riskLevel}, totalFindings=${auditSummary.totalFindings})`,
       );
 
+      stage = "ai recommendations generated";
+      const aiRecommendations = await this.foundryRecommendations.generateRecommendations({
+        repoUrl: auditRun.repoUrl,
+        auditSummary,
+        findings,
+      });
+      this.logger.log(
+        `[${id}] ai recommendations ${aiRecommendations ? "generated" : "unavailable"}`,
+      );
+
       // Simulate audit work (2 seconds)
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
@@ -95,7 +108,10 @@ export class AuditRunsService {
       stage = "findings persisted";
       const updatedRun = await this.prisma.auditRun.update({
         where: { id },
-        data: { status: "completed", findings: { ...findings, auditSummary } },
+        data: {
+          status: "completed",
+          findings: { ...findings, auditSummary, aiRecommendations },
+        },
       });
 
       this.logger.log(`[${id}] findings persisted`);
