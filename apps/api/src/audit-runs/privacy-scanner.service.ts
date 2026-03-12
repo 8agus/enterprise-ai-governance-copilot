@@ -11,6 +11,7 @@ type PrivacyFinding = {
   severity: FindingSeverity;
   title: string;
   evidence: string;
+  snippet?: string | null;
   recommendation: string;
 };
 
@@ -39,16 +40,21 @@ export class PrivacyScannerService {
     for (const file of sampledFiles) {
       const lowerPath = file.path.toLowerCase();
       const contentText = typeof file.content === "string" ? file.content : "";
-      const patternTarget = contentText.length > 0 ? contentText : file.path;
-      const patternMatchSource = contentText.length > 0 ? "sampled file content" : "sampled file path";
 
       for (const rawPattern of policy.privacy.piiPatterns) {
         const expression = this.toRegExp(rawPattern);
-        if (expression.test(patternTarget)) {
+        const matchedContent = contentText.length > 0 && this.matches(contentText, expression);
+        const matchedPath = !matchedContent && this.matches(file.path, expression);
+
+        if (matchedContent || matchedPath) {
+          const patternMatchSource = matchedContent ? "sampled file content" : "sampled file path";
+          const snippet = matchedContent ? this.extractSnippet(contentText, expression) : null;
+
           this.addFinding(findings, findingKeys, {
             severity: "medium",
             title: "Potential PII-related file indicator detected",
             evidence: `Policy pattern matched ${patternMatchSource} for file '${file.path}' (privacy PII pattern '${rawPattern}')`,
+            snippet,
             recommendation:
               "Review this file for personal data handling and ensure privacy-safe storage/access controls.",
           });
@@ -57,11 +63,18 @@ export class PrivacyScannerService {
 
       for (const rawPattern of policy.privacy.loggingPatterns) {
         const expression = this.toRegExp(rawPattern);
-        if (expression.test(patternTarget)) {
+        const matchedContent = contentText.length > 0 && this.matches(contentText, expression);
+        const matchedPath = !matchedContent && this.matches(file.path, expression);
+
+        if (matchedContent || matchedPath) {
+          const patternMatchSource = matchedContent ? "sampled file content" : "sampled file path";
+          const snippet = matchedContent ? this.extractSnippet(contentText, expression) : null;
+
           this.addFinding(findings, findingKeys, {
             severity: "medium",
             title: "Potential risky logging indicator detected",
             evidence: `Policy pattern matched ${patternMatchSource} for file '${file.path}' (privacy logging pattern '${rawPattern}')`,
+            snippet,
             recommendation: "Review logging to avoid recording personal or sensitive user data.",
           });
         }
@@ -109,6 +122,27 @@ export class PrivacyScannerService {
     } catch {
       throw new Error(`Invalid privacy pattern in baseline policy: '${rawPattern}'`);
     }
+  }
+
+  private matches(text: string, expression: RegExp): boolean {
+    const candidate = new RegExp(expression.source, expression.flags.replace(/g/g, ""));
+    return candidate.test(text);
+  }
+
+  private extractSnippet(contentText: string, expression: RegExp): string | null {
+    const candidate = new RegExp(expression.source, expression.flags.replace(/g/g, ""));
+    const match = candidate.exec(contentText);
+
+    if (!match || typeof match.index !== "number") {
+      return null;
+    }
+
+    const lineStart = contentText.lastIndexOf("\n", match.index) + 1;
+    const nextNewLineIndex = contentText.indexOf("\n", match.index);
+    const lineEnd = nextNewLineIndex === -1 ? contentText.length : nextNewLineIndex;
+    const line = contentText.slice(lineStart, lineEnd).trim();
+
+    return line ? line.slice(0, 120) : null;
   }
 
   private addFinding(

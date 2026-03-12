@@ -11,6 +11,7 @@ type SecurityFinding = {
   severity: FindingSeverity;
   title: string;
   evidence: string;
+  snippet?: string | null;
   recommendation: string;
 };
 
@@ -33,8 +34,6 @@ export class SecurityScannerService {
       const filePathLower = file.path.toLowerCase();
       const fileName = filePathLower.split("/").pop() ?? filePathLower;
       const contentText = typeof file.content === "string" ? file.content : "";
-      const patternTarget = contentText.length > 0 ? contentText : file.path;
-      const patternMatchSource = contentText.length > 0 ? "sampled file content" : "sampled file path";
 
       if (governancePolicies.security.dependency_vulnerabilities) {
         for (const suspicious of policy.security.suspiciousFiles) {
@@ -58,11 +57,18 @@ export class SecurityScannerService {
       if (governancePolicies.security.hardcoded_secrets) {
         for (const rawPattern of policy.security.secretPatterns) {
           const expression = this.toRegExp(rawPattern);
-          if (expression.test(patternTarget)) {
+          const matchedContent = contentText.length > 0 && this.matches(contentText, expression);
+          const matchedPath = !matchedContent && this.matches(file.path, expression);
+
+          if (matchedContent || matchedPath) {
+            const patternMatchSource = matchedContent ? "sampled file content" : "sampled file path";
+            const snippet = matchedContent ? this.extractSnippet(contentText, expression) : null;
+
             this.addFinding(findings, findingKeys, {
               severity: "medium",
               title: "Potential secret pattern detected",
               evidence: `Policy pattern matched ${patternMatchSource} for file '${file.path}' (security pattern '${rawPattern}')`,
+              snippet,
               recommendation: "Review this file for secrets and move sensitive values to secure secret storage.",
             });
           }
@@ -102,6 +108,27 @@ export class SecurityScannerService {
     } catch {
       throw new Error(`Invalid security pattern in baseline policy: '${rawPattern}'`);
     }
+  }
+
+  private matches(text: string, expression: RegExp): boolean {
+    const candidate = new RegExp(expression.source, expression.flags.replace(/g/g, ""));
+    return candidate.test(text);
+  }
+
+  private extractSnippet(contentText: string, expression: RegExp): string | null {
+    const candidate = new RegExp(expression.source, expression.flags.replace(/g/g, ""));
+    const match = candidate.exec(contentText);
+
+    if (!match || typeof match.index !== "number") {
+      return null;
+    }
+
+    const lineStart = contentText.lastIndexOf("\n", match.index) + 1;
+    const nextNewLineIndex = contentText.indexOf("\n", match.index);
+    const lineEnd = nextNewLineIndex === -1 ? contentText.length : nextNewLineIndex;
+    const line = contentText.slice(lineStart, lineEnd).trim();
+
+    return line ? line.slice(0, 120) : null;
   }
 
   private addFinding(
