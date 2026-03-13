@@ -31,6 +31,8 @@ jobs:
 
       - name: Build dashboard
         run: npm -w apps/dashboard run build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL_PROD }}
 
       - name: Deploy repo root to Azure Web App (Dashboard)
         uses: azure/webapps-deploy@v3
