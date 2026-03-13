@@ -1,4 +1,10 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ??
+  (process.env.NODE_ENV === "development" ? "http://localhost:3001" : "");
+
+if (!API_URL) {
+  throw new Error("NEXT_PUBLIC_API_URL must be set for non-development environments.");
+}
 
 export type FindingSeverity = "low" | "medium" | "high";
 export type FindingCategory = "security" | "privacy" | "responsible-ai";
