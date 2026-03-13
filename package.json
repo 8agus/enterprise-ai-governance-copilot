@@ -7,8 +7,10 @@
     "dev:dashboard": "npm -w apps/dashboard run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "test": "turbo run test"
-},
+    "test": "turbo run test",
+    "start": "npm run start:dashboard",
+    "start:dashboard": "npm -w apps/dashboard run start"
+  },
   "devDependencies": {
     "prettier": "^3.7.4",
     "turbo": "^2.8.9",
