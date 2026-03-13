@@ -1,10 +1,8 @@
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ??
-  (process.env.NODE_ENV === "development" ? "http://localhost:3001" : "");
-
-if (!API_URL) {
-  throw new Error("NEXT_PUBLIC_API_URL must be set for non-development environments.");
-}
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:3001"
+    : "https://governance-api-esdgerhya5e4ctga.eastasia-01.azurewebsites.net");
 
 export type FindingSeverity = "low" | "medium" | "high";
 export type FindingCategory = "security" | "privacy" | "responsible-ai";
