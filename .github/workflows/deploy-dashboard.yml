@@ -16,7 +16,7 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     env:
-      NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL_PROD }}
+      NEXT_PUBLIC_API_URL: https://governance-api-esdgerhya5e4ctga.eastasia-01.azurewebsites.net
 
     steps:
       - name: Checkout
