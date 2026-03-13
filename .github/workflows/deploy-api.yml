@@ -35,9 +35,31 @@ jobs:
       - name: Build API
         run: npm -w apps/api run build
 
-      - name: Deploy repo root to Azure Web App (API)
+      - name: Stage API deployment artifact
+        run: |
+          rm -rf .deploy/api
+          mkdir -p .deploy/api/apps/api
+
+          # Keep workspace layout expected by startup command: npm -w apps/api run start:prod
+          cp package.json .deploy/api/package.json
+          cp package-lock.json .deploy/api/package-lock.json
+          cp -R apps/api/dist .deploy/api/apps/api/dist
+          cp apps/api/package.json .deploy/api/apps/api/package.json
+
+          # Prisma schema and migrations may be required by runtime/database operations.
+          if [ -d apps/api/prisma ]; then
+            cp -R apps/api/prisma .deploy/api/apps/api/prisma
+          fi
+
+          # Hackathon reliability-first: ship installed dependencies to avoid server-side full monorepo rebuild.
+          cp -R node_modules .deploy/api/node_modules
+          if [ -d apps/api/node_modules ]; then
+            cp -R apps/api/node_modules .deploy/api/apps/api/node_modules
+          fi
+
+      - name: Deploy staged API artifact to Azure Web App (API)
         uses: azure/webapps-deploy@v3
         with:
           app-name: governance-api
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_API }}
-          package: .
+          package: .deploy/api
