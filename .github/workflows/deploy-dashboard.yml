@@ -29,6 +29,17 @@ jobs:
       - name: Install dependencies from repo root
         run: npm ci
 
+      - name: Verify dashboard build env
+        run: |
+          if [ -z "$NEXT_PUBLIC_API_URL" ]; then
+            echo "NEXT_PUBLIC_API_URL is empty"
+            exit 1
+          else
+            echo "NEXT_PUBLIC_API_URL is set"
+          fi
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL_PROD }}
+
       - name: Build dashboard
         run: npm -w apps/dashboard run build
         env:
