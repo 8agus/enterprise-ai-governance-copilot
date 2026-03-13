@@ -1,0 +1,40 @@
+name: Deploy Dashboard to Azure App Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/dashboard/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - "turbo.json"
+      - ".github/workflows/deploy-dashboard.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: npm
+
+      - name: Install dependencies from repo root
+        run: npm ci
+
+      - name: Build dashboard
+        run: npm -w apps/dashboard run build
+
+      - name: Deploy repo root to Azure Web App (Dashboard)
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: governance-dashboard
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DASHBOARD }}
+          package: .
